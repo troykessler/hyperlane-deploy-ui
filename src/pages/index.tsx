@@ -1,14 +1,24 @@
 import type { NextPage } from 'next';
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { CoreConfig } from '@hyperlane-xyz/provider-sdk/core';
 import { ChainName } from '@hyperlane-xyz/sdk';
+import { ProtocolType } from '@hyperlane-xyz/utils';
 import { useStore } from '../features/store';
+import { useMultiProvider } from '../features/chains/hooks';
 import { ChainSelectField } from '../features/chains/ChainSelectField';
 import { ConfigUpload } from '../features/deploy/ConfigUpload';
 import { ConfigPreview } from '../features/deploy/ConfigPreview';
 import { DeployProgress } from '../features/deploy/DeployProgress';
 import { useCoreDeploy } from '../features/deploy/useCoreDeploy';
+import { DeploymentStatus } from '../features/deploy/types';
+import { useReadCoreConfig } from '../features/coreConfig/useReadCoreConfig';
+import { useApplyCoreConfig } from '../features/coreConfig/useApplyCoreConfig';
+import { CoreConfigEditor } from '../features/coreConfig/CoreConfigEditor';
 import { FloatingButtonStrip } from '../components/nav/FloatingButtonStrip';
+import { WalletStatusBar } from '../features/wallet/WalletStatusBar';
+import { useCosmosWallet } from '../features/wallet/hooks/useCosmosWallet';
+import { useRadixWallet } from '../features/wallet/hooks/useRadixWallet';
+import { useAleoWallet } from '../features/wallet/hooks/useAleoWallet';
 
 const Home: NextPage = () => {
   const [activeTab, setActiveTab] = useState<'deploy' | 'view' | 'apply'>('deploy');
@@ -21,7 +31,86 @@ const Home: NextPage = () => {
     addDeployment: s.addDeployment,
   }));
 
+  const multiProvider = useMultiProvider();
   const { deploy, progress, isDeploying } = useCoreDeploy();
+  const { readConfig, currentConfig: readCoreConfig, progress: readProgress, isReading } = useReadCoreConfig();
+  const { applyConfig, progress: applyProgress, isApplying } = useApplyCoreConfig();
+
+  // State for Apply Updates tab
+  const [editedConfig, setEditedConfig] = useState<CoreConfig | null>(null);
+  const [applyError, setApplyError] = useState<string>('');
+
+  // Wallet hooks
+  const cosmosWallet = useCosmosWallet(selectedChain);
+  const radixWallet = useRadixWallet();
+  const aleoWallet = useAleoWallet();
+
+  // Get protocol for selected chain
+  const selectedProtocol = useMemo(() => {
+    if (!selectedChain) return null;
+    const metadata = multiProvider.tryGetChainMetadata(selectedChain);
+    return metadata?.protocol || null;
+  }, [selectedChain, multiProvider]);
+
+  // Auto-read config when chain is selected (for Apply Updates tab)
+  useEffect(() => {
+    if (selectedChain && activeTab === 'apply') {
+      handleReadConfig();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedChain, activeTab]);
+
+  const getWalletClient = async () => {
+    if (selectedProtocol === ProtocolType.Cosmos) {
+      return await cosmosWallet.getSigningStargateClient();
+    } else if (selectedProtocol === ProtocolType.Radix) {
+      return radixWallet.rdt;
+    } else if (selectedProtocol === ProtocolType.Aleo) {
+      return aleoWallet.wallet;
+    }
+    return null;
+  };
+
+  const handleReadConfig = async () => {
+    if (!selectedChain) return;
+
+    try {
+      const walletClient = await getWalletClient();
+      if (!walletClient) {
+        setApplyError('Please connect your wallet first');
+        return;
+      }
+      await readConfig(selectedChain, walletClient);
+      setApplyError('');
+    } catch (error) {
+      setApplyError(`Failed to read config: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
+
+  const handleApplyUpdates = async () => {
+    if (!selectedChain || !editedConfig) {
+      setApplyError('Please select a chain and edit the configuration');
+      return;
+    }
+
+    setApplyError('');
+
+    try {
+      const walletClient = await getWalletClient();
+      if (!walletClient) {
+        setApplyError('Please connect your wallet first');
+        return;
+      }
+
+      const success = await applyConfig(selectedChain, editedConfig, walletClient);
+      if (success) {
+        // Refresh the config after successful apply
+        await handleReadConfig();
+      }
+    } catch (error) {
+      setApplyError(`Failed to apply updates: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  };
 
   const handleDeploy = async () => {
     if (!selectedChain || !currentConfig) {
@@ -31,20 +120,27 @@ const Home: NextPage = () => {
 
     setUploadError('');
 
-    // TODO: Get actual wallet client from protocol-specific context
-    const walletClient = null;
+    try {
+      const walletClient = await getWalletClient();
+      if (!walletClient) {
+        setUploadError('Please connect your wallet first');
+        return;
+      }
 
-    const result = await deploy(selectedChain, currentConfig, walletClient);
+      const result = await deploy(selectedChain, currentConfig, walletClient);
 
-    if (result) {
-      addDeployment({
-        id: `${result.chainName}-${result.timestamp}`,
-        chainName: result.chainName,
-        timestamp: result.timestamp,
-        addresses: result.addresses,
-        config: currentConfig,
-        txHashes: result.txHashes,
-      });
+      if (result) {
+        addDeployment({
+          id: `${result.chainName}-${result.timestamp}`,
+          chainName: result.chainName,
+          timestamp: result.timestamp,
+          addresses: result.addresses,
+          config: currentConfig,
+          txHashes: result.txHashes,
+        });
+      }
+    } catch (error) {
+      setUploadError(`Failed to deploy: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -91,6 +187,9 @@ const Home: NextPage = () => {
         {activeTab === 'deploy' && (
           <div className="space-y-6">
             <h2 className="text-2xl font-bold text-gray-900">Deploy Core Contracts</h2>
+
+            {/* Wallet Status */}
+            <WalletStatusBar selectedChain={selectedChain} selectedProtocol={selectedProtocol} />
 
             {/* Config Upload */}
             <div>
@@ -205,14 +304,103 @@ const Home: NextPage = () => {
         )}
 
         {activeTab === 'apply' && (
-          <div className="text-center py-12">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Apply Config Updates</h2>
-            <p className="text-gray-500 mb-4">
-              Update existing core contract configurations
-            </p>
-            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg max-w-md mx-auto">
-              <p className="text-sm text-yellow-800">
-                Coming soon: Update ISM, hooks, and ownership settings on deployed contracts
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-gray-900">Apply Config Updates</h2>
+
+            {/* Wallet Status */}
+            <WalletStatusBar selectedChain={selectedChain} selectedProtocol={selectedProtocol} />
+
+            {/* Chain Selection */}
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 mb-3">1. Select Chain</h3>
+              <ChainSelectField
+                value={selectedChain}
+                onChange={setSelectedChain}
+                label=""
+              />
+            </div>
+
+            {/* Read Progress */}
+            {selectedChain && (
+              <div>
+                <DeployProgress
+                  status={
+                    readProgress.status === 'idle' ? DeploymentStatus.Idle :
+                    readProgress.status === 'reading' ? DeploymentStatus.Validating :
+                    readProgress.status === 'success' ? DeploymentStatus.Deployed :
+                    DeploymentStatus.Failed
+                  }
+                  message={readProgress.message}
+                  error={readProgress.error}
+                />
+              </div>
+            )}
+
+            {/* Config Editor */}
+            {readCoreConfig && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">2. Edit Configuration</h3>
+                <CoreConfigEditor
+                  initialConfig={readCoreConfig}
+                  onChange={setEditedConfig}
+                  onError={setApplyError}
+                />
+              </div>
+            )}
+
+            {/* Apply Progress */}
+            {applyProgress.status !== 'idle' && (
+              <DeployProgress
+                status={
+                  applyProgress.status === 'validating' ? DeploymentStatus.Validating :
+                  applyProgress.status === 'applying' ? DeploymentStatus.Deploying :
+                  applyProgress.status === 'success' ? DeploymentStatus.Deployed :
+                  DeploymentStatus.Failed
+                }
+                message={applyProgress.message}
+                error={applyProgress.error}
+              />
+            )}
+
+            {/* Error Display */}
+            {applyError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+                {applyError}
+              </div>
+            )}
+
+            {/* Action Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={handleReadConfig}
+                disabled={!selectedChain || isReading}
+                className={`flex-1 px-6 py-3 rounded-lg font-medium transition-colors ${
+                  selectedChain && !isReading
+                    ? 'bg-gray-600 text-white hover:bg-gray-700'
+                    : 'bg-gray-400 text-white cursor-not-allowed'
+                }`}
+              >
+                {isReading ? 'Reading...' : 'Read Current Config'}
+              </button>
+
+              <button
+                onClick={handleApplyUpdates}
+                disabled={!selectedChain || !editedConfig || isApplying}
+                className={`flex-1 px-6 py-3 rounded-lg font-medium transition-colors ${
+                  selectedChain && editedConfig && !isApplying
+                    ? 'bg-blue-600 text-white hover:bg-blue-700'
+                    : 'bg-gray-400 text-white cursor-not-allowed'
+                }`}
+              >
+                {isApplying ? 'Applying...' : 'Apply Updates'}
+              </button>
+            </div>
+
+            {/* Info */}
+            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Note:</strong> This will read the current core configuration from the chain, allow you to edit it,
+                and apply any changes as transactions. Make sure your wallet is connected.
               </p>
             </div>
           </div>

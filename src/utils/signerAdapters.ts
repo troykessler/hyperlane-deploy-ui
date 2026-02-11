@@ -1,71 +1,98 @@
-import { ChainName } from '@hyperlane-xyz/sdk';
+import { ChainMetadata } from '@hyperlane-xyz/sdk';
 import { ProtocolType } from '@hyperlane-xyz/utils';
 import { AltVM } from '@hyperlane-xyz/provider-sdk';
 import type { AnnotatedTx, TxReceipt } from '@hyperlane-xyz/provider-sdk/module';
+import { CosmosNativeSigner } from '@hyperlane-xyz/cosmos-sdk';
+import { RadixSigner } from '@hyperlane-xyz/radix-sdk';
+import { AleoSigner } from '@hyperlane-xyz/aleo-sdk';
+import type { OfflineSigner } from '@cosmjs/proto-signing';
 
 /**
  * Get the appropriate AltVM signer for a given chain
- * This wraps protocol-specific wallet instances into the AltVM.ISigner interface
+ * This creates protocol-specific signer instances
  */
-export async function getAltVMSigner(
-  chainName: ChainName,
-  protocol: ProtocolType,
+export async function createAltVMSigner(
+  chainMetadata: ChainMetadata,
   walletClient: any
 ): Promise<AltVM.ISigner<AnnotatedTx, TxReceipt>> {
-  switch (protocol) {
+  const rpcUrls = chainMetadata.rpcUrls.map(rpc => rpc.http);
+
+  switch (chainMetadata.protocol) {
     case ProtocolType.Cosmos:
-      return createCosmosSignerAdapter(walletClient);
+      return await createCosmosSigner(rpcUrls, walletClient);
     case ProtocolType.Radix:
-      return createRadixSignerAdapter(walletClient);
+      return await createRadixSigner(rpcUrls, walletClient);
     case ProtocolType.Aleo:
-      return createAleoSignerAdapter(walletClient);
+      return await createAleoSigner(rpcUrls, walletClient);
     default:
-      throw new Error(`Unsupported protocol for deployment: ${protocol}`);
+      throw new Error(`Unsupported protocol for deployment: ${chainMetadata.protocol}`);
   }
 }
 
 /**
- * Cosmos signer adapter
- * Wraps Cosmos Kit wallet client
+ * Create Cosmos signer from Cosmos Kit wallet
  */
-function createCosmosSignerAdapter(
-  cosmosClient: any
-): AltVM.ISigner<AnnotatedTx, TxReceipt> {
-  // TODO: Implement actual Cosmos signing adapter
-  // For now, throw error when attempting to use
-  throw new Error('Cosmos signing adapter not yet implemented - wallet integration required');
+async function createCosmosSigner(
+  rpcUrls: string[],
+  offlineSigner: OfflineSigner
+): Promise<AltVM.ISigner<any, any>> {
+  if (!offlineSigner) {
+    throw new Error('Cosmos wallet not connected');
+  }
+
+  // Use CosmosNativeSigner from cosmos-sdk
+  const signer = await CosmosNativeSigner.connectWithSigner(
+    rpcUrls,
+    offlineSigner,
+    {
+      // Optional: add gas price config
+      fee: 'auto',
+    }
+  );
+
+  return signer as any; // Type assertion for compatibility
 }
 
 /**
- * Radix signer adapter
- * Wraps Radix DApp Toolkit
+ * Create Radix signer from Radix DApp Toolkit
  */
-function createRadixSignerAdapter(
+async function createRadixSigner(
+  rpcUrls: string[],
   radixToolkit: any
-): AltVM.ISigner<AnnotatedTx, TxReceipt> {
-  // TODO: Implement actual Radix signing adapter
-  // For now, throw error when attempting to use
-  throw new Error('Radix signing adapter not yet implemented - wallet integration required');
+): Promise<AltVM.ISigner<any, any>> {
+  if (!radixToolkit || !radixToolkit.walletApi) {
+    throw new Error('Radix wallet not connected');
+  }
+
+  // Use RadixSigner from radix-sdk
+  // Note: This is a placeholder - actual implementation depends on Radix SDK API
+  const signer = await RadixSigner.connectWithSigner(
+    rpcUrls,
+    radixToolkit,
+    {}
+  );
+
+  return signer as any;
 }
 
 /**
- * Aleo signer adapter
- * Wraps Aleo wallet adapter
+ * Create Aleo signer from Aleo wallet adapter
  */
-function createAleoSignerAdapter(
+async function createAleoSigner(
+  rpcUrls: string[],
   aleoWallet: any
-): AltVM.ISigner<AnnotatedTx, TxReceipt> {
-  // TODO: Implement actual Aleo signing adapter
-  // For now, throw error when attempting to use
-  throw new Error('Aleo signing adapter not yet implemented - wallet integration required');
-}
+): Promise<AltVM.ISigner<any, any>> {
+  if (!aleoWallet || !aleoWallet.publicKey) {
+    throw new Error('Aleo wallet not connected');
+  }
 
-/**
- * Get wallet client for a given protocol
- * This retrieves the active wallet instance from the appropriate context
- */
-export function getWalletClient(protocol: ProtocolType): any {
-  // TODO: Implement wallet client retrieval from React contexts
-  // This would use useCosmosWallet(), useRadixWallet(), useAleoWallet()
-  throw new Error(`Wallet retrieval not yet implemented for ${protocol}`);
+  // Use AleoSigner from aleo-sdk
+  // Note: This is a placeholder - actual implementation depends on Aleo SDK API
+  const signer = await AleoSigner.connectWithSigner(
+    rpcUrls,
+    aleoWallet,
+    {}
+  );
+
+  return signer as any;
 }

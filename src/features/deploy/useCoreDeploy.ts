@@ -4,7 +4,7 @@ import { CoreConfig } from '@hyperlane-xyz/provider-sdk/core';
 import { AltVMCoreModule } from '@hyperlane-xyz/deploy-sdk';
 import { useMultiProvider } from '../chains/hooks';
 import { createChainLookup } from '../../utils/chainLookup';
-import { getAltVMSigner } from '../../utils/signerAdapters';
+import { createAltVMSigner } from '../../utils/signerAdapters';
 import { logger } from '../../utils/logger';
 import { DeploymentStatus, DeployResult } from './types';
 
@@ -48,9 +48,8 @@ export function useCoreDeploy() {
           message: 'Connecting to wallet...',
         });
 
-        const signer = await getAltVMSigner(
-          chainName,
-          chainMetadata.protocol,
+        const signer = await createAltVMSigner(
+          chainMetadata,
           walletClient
         );
 

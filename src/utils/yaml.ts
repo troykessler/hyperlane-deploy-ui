@@ -39,6 +39,9 @@ export function serializeConfigToYaml(config: CoreConfig): string {
   }
 }
 
+// Alias for convenience
+export const serializeYamlConfig = serializeConfigToYaml;
+
 /**
  * Validate YAML string without parsing
  */
