@@ -18,7 +18,11 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { config } from '../consts/config';
 import { logger } from '../utils/logger';
+import { initializeAltVMProtocols } from '../utils/protocolInit';
 import { assembleChainMetadata } from './chains/metadata';
+
+// Initialize AltVM protocols (Cosmos, Radix, Aleo)
+initializeAltVMProtocols();
 
 // Increment this when persist state has breaking changes
 const PERSIST_STATE_VERSION = 3;

@@ -19,7 +19,7 @@ export async function createAltVMSigner(
 
   switch (chainMetadata.protocol) {
     case ProtocolType.CosmosNative:
-      return await createCosmosSigner(rpcUrls, walletClient);
+      return await createCosmosSigner(rpcUrls, walletClient, chainMetadata);
     case ProtocolType.Radix:
       return await createRadixSigner(rpcUrls, walletClient);
     case ProtocolType.Aleo:
@@ -34,7 +34,8 @@ export async function createAltVMSigner(
  */
 async function createCosmosSigner(
   rpcUrls: string[],
-  offlineSigner: OfflineSigner
+  offlineSigner: OfflineSigner,
+  chainMetadata: ChainMetadata
 ): Promise<AltVM.ISigner<any, any>> {
   if (!offlineSigner) {
     throw new Error('Cosmos wallet not connected');
@@ -45,7 +46,7 @@ async function createCosmosSigner(
     rpcUrls,
     offlineSigner,
     {
-      // Optional: add gas price config
+      metadata: chainMetadata,
       fee: 'auto',
     }
   );

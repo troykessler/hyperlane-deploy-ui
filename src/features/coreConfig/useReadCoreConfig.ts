@@ -39,10 +39,23 @@ export function useReadCoreConfig() {
 
         logger.debug('Reading core config', { chainName });
 
-        // Create module with minimal config - read() will fetch actual config
+        // Create module with minimal placeholder config - read() will fetch actual config
+        const placeholderConfig = {
+          owner: '0x0000000000000000000000000000000000000000',
+          defaultIsm: {
+            type: 'testIsm',
+          },
+          defaultHook: {
+            type: 'merkleTreeHook',
+          },
+          requiredHook: {
+            type: 'merkleTreeHook',
+          },
+        } as CoreConfig;
+
         const module = await AltVMCoreModule.create({
           chain: chainName,
-          config: {} as CoreConfig, // Placeholder, will be populated by read()
+          config: placeholderConfig,
           chainLookup,
           signer,
         });

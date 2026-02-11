@@ -62,7 +62,7 @@ const Home: NextPage = () => {
 
   const getWalletClient = async () => {
     if (selectedProtocol === ProtocolType.CosmosNative) {
-      return await cosmosWallet.getSigningStargateClient();
+      return await cosmosWallet.getOfflineSigner();
     } else if (selectedProtocol === ProtocolType.Radix) {
       return radixWallet.rdt;
     } else if (selectedProtocol === ProtocolType.Aleo) {

@@ -15,6 +15,7 @@ export function useCosmosWallet(chainName?: string) {
     disconnect: chain.disconnect,
     getSigningCosmWasmClient: chain.getSigningCosmWasmClient,
     getSigningStargateClient: chain.getSigningStargateClient,
+    getOfflineSigner: chain.getOfflineSigner,
     status: chain.status,
   };
 }
