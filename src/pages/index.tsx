@@ -75,12 +75,8 @@ const Home: NextPage = () => {
     if (!selectedChain) return;
 
     try {
-      const walletClient = await getWalletClient();
-      if (!walletClient) {
-        setApplyError('Please connect your wallet first');
-        return;
-      }
-      await readConfig(selectedChain, walletClient);
+      // Read config - no wallet needed!
+      await readConfig(selectedChain);
       setApplyError('');
     } catch (error) {
       setApplyError(`Failed to read config: ${error instanceof Error ? error.message : 'Unknown error'}`);
