@@ -21,7 +21,7 @@ export function WalletStatusBar({ selectedChain, selectedProtocol }: WalletStatu
     }
 
     switch (selectedProtocol) {
-      case ProtocolType.Cosmos:
+      case ProtocolType.CosmosNative:
         return {
           isConnected: !!cosmosWallet.address,
           address: cosmosWallet.address,
@@ -30,7 +30,7 @@ export function WalletStatusBar({ selectedChain, selectedProtocol }: WalletStatu
             console.log('Use Cosmos Kit UI to connect');
           },
           disconnect: cosmosWallet.disconnect,
-          protocol: 'Cosmos',
+          protocol: 'Cosmos Native',
         };
       case ProtocolType.Radix:
         return {

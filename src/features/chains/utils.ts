@@ -32,12 +32,12 @@ export function hasPermissionlessChain(multiProvider: MultiProtocolProvider, ids
 }
 
 /**
- * Returns chains that support core contract deployment (Cosmos, Radix, Aleo only)
+ * Returns chains that support core contract deployment (CosmosNative, Radix, Aleo only)
  */
 export function getDeployableChains(chainMetadata: ChainMap<ChainMetadata>): ChainName[] {
   return Object.entries(chainMetadata)
     .filter(([_, metadata]) =>
-      metadata.protocol === ProtocolType.Cosmos ||
+      metadata.protocol === ProtocolType.CosmosNative ||
       metadata.protocol === ProtocolType.Radix ||
       metadata.protocol === ProtocolType.Aleo
     )
@@ -45,12 +45,12 @@ export function getDeployableChains(chainMetadata: ChainMap<ChainMetadata>): Cha
 }
 
 /**
- * Checks if a chain is deployable (Cosmos, Radix, or Aleo)
+ * Checks if a chain is deployable (CosmosNative, Radix, or Aleo)
  */
 export function isDeployableChain(chainMetadata: ChainMetadata | null): boolean {
   if (!chainMetadata) return false;
   return (
-    chainMetadata.protocol === ProtocolType.Cosmos ||
+    chainMetadata.protocol === ProtocolType.CosmosNative ||
     chainMetadata.protocol === ProtocolType.Radix ||
     chainMetadata.protocol === ProtocolType.Aleo
   );

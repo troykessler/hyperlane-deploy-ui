@@ -61,7 +61,7 @@ const Home: NextPage = () => {
   }, [selectedChain, activeTab]);
 
   const getWalletClient = async () => {
-    if (selectedProtocol === ProtocolType.Cosmos) {
+    if (selectedProtocol === ProtocolType.CosmosNative) {
       return await cosmosWallet.getSigningStargateClient();
     } else if (selectedProtocol === ProtocolType.Radix) {
       return radixWallet.rdt;

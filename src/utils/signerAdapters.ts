@@ -18,7 +18,7 @@ export async function createAltVMSigner(
   const rpcUrls = chainMetadata.rpcUrls.map(rpc => rpc.http);
 
   switch (chainMetadata.protocol) {
-    case ProtocolType.Cosmos:
+    case ProtocolType.CosmosNative:
       return await createCosmosSigner(rpcUrls, walletClient);
     case ProtocolType.Radix:
       return await createRadixSigner(rpcUrls, walletClient);
