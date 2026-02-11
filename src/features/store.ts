@@ -55,6 +55,12 @@ export interface AppState {
   registry: IRegistry;
   setDeployContext: (context: DeployContext) => void;
 
+  // Custom chains
+  customChains: ChainMap<ChainMetadata>;
+  addCustomChain: (chainName: string, metadata: ChainMetadata) => Promise<void>;
+  updateCustomChain: (chainName: string, metadata: ChainMetadata) => Promise<void>;
+  deleteCustomChain: (chainName: string) => Promise<void>;
+
   // Deployment state
   selectedChain: ChainName;
   setSelectedChain: (chain: ChainName) => void;
@@ -90,6 +96,7 @@ export const useStore = create<AppState>()(
         const { multiProvider, chainMetadata } = await initDeployContext({
           ...get(),
           chainMetadataOverrides: filtered,
+          customChains: get().customChains,
         });
         set({
           chainMetadataOverrides: filtered,
@@ -106,6 +113,63 @@ export const useStore = create<AppState>()(
       setDeployContext: (context) => {
         logger.debug('Setting deploy context in store');
         set(context);
+      },
+
+      // Custom chains
+      customChains: {},
+      addCustomChain: async (chainName, metadata) => {
+        logger.debug('Adding custom chain', { chainName });
+        const state = get();
+        const newCustomChains = { ...state.customChains, [chainName]: metadata };
+
+        // Re-initialize deploy context to include new chain
+        const context = await initDeployContext({
+          registry: state.registry,
+          chainMetadataOverrides: state.chainMetadataOverrides,
+          customChains: newCustomChains,
+        });
+
+        // Only update state after multiProvider is ready
+        set({
+          ...context,
+          customChains: newCustomChains,
+        });
+      },
+      updateCustomChain: async (chainName, metadata) => {
+        logger.debug('Updating custom chain', { chainName });
+        const state = get();
+        const updatedCustomChains = { ...state.customChains, [chainName]: metadata };
+
+        // Re-initialize deploy context with updated chain
+        const context = await initDeployContext({
+          registry: state.registry,
+          chainMetadataOverrides: state.chainMetadataOverrides,
+          customChains: updatedCustomChains,
+        });
+
+        // Only update state after multiProvider is ready
+        set({
+          ...context,
+          customChains: updatedCustomChains,
+        });
+      },
+      deleteCustomChain: async (chainName) => {
+        logger.debug('Deleting custom chain', { chainName });
+        const state = get();
+        const { [chainName]: _, ...remainingCustomChains } = state.customChains;
+
+        // Re-initialize deploy context without deleted chain
+        const context = await initDeployContext({
+          registry: state.registry,
+          chainMetadataOverrides: state.chainMetadataOverrides,
+          customChains: remainingCustomChains,
+        });
+
+        // Only update state after multiProvider is ready
+        set({
+          ...context,
+          customChains: remainingCustomChains,
+        });
       },
 
       // Deployment state
@@ -150,6 +214,7 @@ export const useStore = create<AppState>()(
       partialize: (state) => ({
         // fields to persist
         chainMetadataOverrides: state.chainMetadataOverrides,
+        customChains: state.customChains,
         deployments: state.deployments,
         selectedChain: state.selectedChain,
       }),
@@ -161,7 +226,11 @@ export const useStore = create<AppState>()(
             logger.error('Error during hydration', error);
             return;
           }
-          initDeployContext(state).then((context) => {
+          initDeployContext({
+            registry: state.registry,
+            chainMetadataOverrides: state.chainMetadataOverrides,
+            customChains: state.customChains || {},
+          }).then((context) => {
             state.setDeployContext(context);
             logger.debug('Rehydration complete');
           });
@@ -174,9 +243,11 @@ export const useStore = create<AppState>()(
 async function initDeployContext({
   registry,
   chainMetadataOverrides,
+  customChains = {},
 }: {
   registry: IRegistry;
   chainMetadataOverrides: ChainMap<Partial<ChainMetadata> | undefined>;
+  customChains?: ChainMap<ChainMetadata>;
 }): Promise<DeployContext> {
   let currentRegistry = registry;
   try {
@@ -201,11 +272,23 @@ async function initDeployContext({
       currentRegistry,
       chainMetadataOverrides,
     );
-    const multiProvider = new MultiProtocolProvider(chainMetadataWithOverrides);
+
+    // Merge custom chains with registry chains
+    const mergedChainMetadata = {
+      ...chainMetadata,
+      ...customChains,
+    };
+
+    const mergedChainMetadataWithOverrides = {
+      ...chainMetadataWithOverrides,
+      ...customChains,
+    };
+
+    const multiProvider = new MultiProtocolProvider(mergedChainMetadataWithOverrides);
 
     return {
       registry: currentRegistry,
-      chainMetadata,
+      chainMetadata: mergedChainMetadata,
       multiProvider,
     };
   } catch (error) {

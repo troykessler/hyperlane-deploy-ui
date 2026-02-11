@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { CoreConfig } from '@hyperlane-xyz/provider-sdk/core';
 import { serializeYamlConfig, parseYamlConfig } from '../../utils/yaml';
 
@@ -9,22 +9,20 @@ interface CoreConfigEditorProps {
 }
 
 export function CoreConfigEditor({ initialConfig, onChange, onError }: CoreConfigEditorProps) {
-  const [yamlText, setYamlText] = useState('');
-  const [parseError, setParseError] = useState<string>('');
-
-  // Initialize YAML text from config
-  useEffect(() => {
-    if (initialConfig) {
-      try {
-        const serialized = serializeYamlConfig(initialConfig);
-        setYamlText(serialized);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Failed to serialize config';
-        setParseError(message);
-        onError(message);
-      }
+  // Serialize initial config to YAML
+  const initialYaml = useMemo(() => {
+    if (!initialConfig) return '';
+    try {
+      return serializeYamlConfig(initialConfig);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to serialize config';
+      onError(message);
+      return '';
     }
   }, [initialConfig, onError]);
+
+  const [yamlText, setYamlText] = useState(initialYaml);
+  const [parseError, setParseError] = useState<string>('');
 
   const handleYamlChange = (newText: string) => {
     setYamlText(newText);

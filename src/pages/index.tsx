@@ -19,9 +19,10 @@ import { WalletStatusBar } from '../features/wallet/WalletStatusBar';
 import { useCosmosWallet } from '../features/wallet/hooks/useCosmosWallet';
 import { useRadixWallet } from '../features/wallet/hooks/useRadixWallet';
 import { useAleoWallet } from '../features/wallet/hooks/useAleoWallet';
+import { CustomChainsList } from '../features/chains/CustomChainsList';
 
 const Home: NextPage = () => {
-  const [activeTab, setActiveTab] = useState<'deploy' | 'view' | 'apply'>('deploy');
+  const [activeTab, setActiveTab] = useState<'deploy' | 'view' | 'apply' | 'chains'>('deploy');
   const [selectedChain, setSelectedChain] = useState<ChainName>('');
   const [currentConfig, setCurrentConfig] = useState<CoreConfig | null>(null);
   const [uploadError, setUploadError] = useState<string>('');
@@ -173,6 +174,16 @@ const Home: NextPage = () => {
           }`}
         >
           Apply Updates
+        </button>
+        <button
+          onClick={() => setActiveTab('chains')}
+          className={`px-6 py-3 font-medium transition-colors ${
+            activeTab === 'chains'
+              ? 'border-b-2 border-blue-500 text-blue-600'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          Manage Chains
         </button>
       </div>
 
@@ -399,6 +410,17 @@ const Home: NextPage = () => {
                 and apply any changes as transactions. Make sure your wallet is connected.
               </p>
             </div>
+          </div>
+        )}
+
+        {activeTab === 'chains' && (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-gray-900">Manage Custom Chains</h2>
+            <p className="text-gray-600">
+              Add custom chain metadata to deploy to chains not in the Hyperlane registry.
+              Custom chains are stored locally in your browser.
+            </p>
+            <CustomChainsList />
           </div>
         )}
       </div>

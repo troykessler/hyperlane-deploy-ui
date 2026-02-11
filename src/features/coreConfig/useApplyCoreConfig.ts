@@ -48,7 +48,7 @@ export function useApplyCoreConfig() {
         logger.debug('Creating core module for update', { chainName });
 
         // Create module with the new config to apply
-        const module = await AltVMCoreModule.create({
+        const coreModule = await AltVMCoreModule.create({
           chain: chainName,
           config: newConfig,
           chainLookup,
@@ -57,7 +57,7 @@ export function useApplyCoreConfig() {
 
         logger.debug('Applying config update', { chainName, newConfig });
 
-        const txs = await module.update(newConfig);
+        const txs = await coreModule.update(newConfig);
 
         logger.debug('Config update successful', { chainName, txCount: txs.length });
 
