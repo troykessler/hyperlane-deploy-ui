@@ -167,40 +167,40 @@ const Home: NextPage = () => {
       <div className="flex border-b border-gray-200">
         <button
           onClick={() => setActiveTab('deploy')}
-          className={`px-6 py-3 font-medium transition-colors ${
+          className={`px-6 py-3 font-semibold transition-colors ${
             activeTab === 'deploy'
               ? 'border-b-2 border-blue-500 text-blue-600'
-              : 'text-gray-500 hover:text-gray-700'
+              : 'text-gray-900 hover:text-blue-600 font-semibold'
           }`}
         >
           Deploy
         </button>
         <button
           onClick={() => setActiveTab('view')}
-          className={`px-6 py-3 font-medium transition-colors ${
+          className={`px-6 py-3 font-semibold transition-colors ${
             activeTab === 'view'
               ? 'border-b-2 border-blue-500 text-blue-600'
-              : 'text-gray-500 hover:text-gray-700'
+              : 'text-gray-900 hover:text-blue-600 font-semibold'
           }`}
         >
           View Deployments ({deployments.length})
         </button>
         <button
           onClick={() => setActiveTab('apply')}
-          className={`px-6 py-3 font-medium transition-colors ${
+          className={`px-6 py-3 font-semibold transition-colors ${
             activeTab === 'apply'
               ? 'border-b-2 border-blue-500 text-blue-600'
-              : 'text-gray-500 hover:text-gray-700'
+              : 'text-gray-900 hover:text-blue-600 font-semibold'
           }`}
         >
           Apply Updates
         </button>
         <button
           onClick={() => setActiveTab('chains')}
-          className={`px-6 py-3 font-medium transition-colors ${
+          className={`px-6 py-3 font-semibold transition-colors ${
             activeTab === 'chains'
               ? 'border-b-2 border-blue-500 text-blue-600'
-              : 'text-gray-500 hover:text-gray-700'
+              : 'text-gray-900 hover:text-blue-600 font-semibold'
           }`}
         >
           Manage Chains

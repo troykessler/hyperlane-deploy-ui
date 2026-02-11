@@ -46,7 +46,17 @@ export function useReadCoreConfig() {
 
         const chainLookup = createChainLookup(multiProvider);
 
-        logger.debug('Reading core config', { chainName, mailboxAddress });
+        // Validate mailbox address
+        if (!mailboxAddress || mailboxAddress.trim() === '') {
+          throw new Error('Mailbox address is required');
+        }
+
+        logger.debug('Reading core config', {
+          chainName,
+          mailboxAddress,
+          protocol: chainMetadata.protocol,
+          addressLength: mailboxAddress.length
+        });
 
         // Create read-only provider (no wallet needed!)
         const protocolProvider = getProtocolProvider(chainMetadata.protocol);
@@ -54,7 +64,29 @@ export function useReadCoreConfig() {
 
         // Use AltVMCoreReader for read-only operations
         const reader = new AltVMCoreReader(chainMetadata, chainLookup, provider);
-        const config = await reader.read(mailboxAddress);
+
+        let config;
+        try {
+          config = await reader.read(mailboxAddress);
+        } catch (readError) {
+          const errorMsg = readError instanceof Error ? readError.message : String(readError);
+          logger.error('Failed to read core config', {
+            error: errorMsg,
+            chainName,
+            mailboxAddress,
+            protocol: chainMetadata.protocol
+          });
+
+          // Provide more helpful error message
+          if (errorMsg.includes('not a Cosmos')) {
+            throw new Error(
+              `Invalid address format for Cosmos chain. The mailbox address "${mailboxAddress}" does not appear to be a valid Cosmos address. ` +
+              `Cosmos addresses should start with a prefix like "cosmos1" or "${chainMetadata.bech32Prefix || 'chain-prefix'}1" followed by the address.`
+            );
+          }
+
+          throw readError;
+        }
 
         logger.debug('Core config read successfully', { chainName, config });
 
