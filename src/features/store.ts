@@ -20,6 +20,11 @@ import { config } from '../consts/config';
 import { logger } from '../utils/logger';
 import { initializeAltVMProtocols } from '../utils/protocolInit';
 import { assembleChainMetadata } from './chains/metadata';
+import type {
+  WarpConfig,
+  WarpConfigInputMethod,
+  WarpDeploymentRecord,
+} from './warp/types';
 
 // Initialize AltVM protocols (Cosmos, Radix, Aleo)
 initializeAltVMProtocols();
@@ -73,6 +78,18 @@ export interface AppState {
   setDeploymentInProgress: (inProgress: boolean) => void;
   configInputMethod: ConfigInputMethod;
   setConfigInputMethod: (method: ConfigInputMethod) => void;
+
+  // Warp deployment state
+  currentWarpConfig: WarpConfig | null;
+  setCurrentWarpConfig: (config: WarpConfig | null) => void;
+  warpDeployments: WarpDeploymentRecord[];
+  addWarpDeployment: (deployment: WarpDeploymentRecord) => void;
+  resetWarpDeployments: () => void;
+  warpConfigInputMethod: WarpConfigInputMethod;
+  setWarpConfigInputMethod: (method: WarpConfigInputMethod) => void;
+  warpMultiChainConfigs: Record<ChainName, WarpConfig>;
+  setWarpChainConfig: (chain: ChainName, config: WarpConfig) => void;
+  clearWarpMultiChainConfigs: () => void;
 
   // Shared component state
   isSideBarOpen: boolean;
@@ -197,6 +214,35 @@ export const useStore = create<AppState>()(
         set(() => ({ configInputMethod }));
       },
 
+      // Warp deployment state
+      currentWarpConfig: null,
+      setCurrentWarpConfig: (currentWarpConfig) => {
+        set(() => ({ currentWarpConfig }));
+      },
+      warpDeployments: [],
+      addWarpDeployment: (deployment) => {
+        set((state) => ({ warpDeployments: [...state.warpDeployments, deployment] }));
+      },
+      resetWarpDeployments: () => {
+        set(() => ({ warpDeployments: [] }));
+      },
+      warpConfigInputMethod: 'builder',
+      setWarpConfigInputMethod: (warpConfigInputMethod) => {
+        set(() => ({ warpConfigInputMethod }));
+      },
+      warpMultiChainConfigs: {},
+      setWarpChainConfig: (chain, config) => {
+        set((state) => ({
+          warpMultiChainConfigs: {
+            ...state.warpMultiChainConfigs,
+            [chain]: config,
+          },
+        }));
+      },
+      clearWarpMultiChainConfigs: () => {
+        set(() => ({ warpMultiChainConfigs: {} }));
+      },
+
       // Shared component state
       isSideBarOpen: false,
       setIsSideBarOpen: (isSideBarOpen) => {
@@ -217,6 +263,7 @@ export const useStore = create<AppState>()(
         customChains: state.customChains,
         deployments: state.deployments,
         selectedChain: state.selectedChain,
+        warpDeployments: state.warpDeployments,
       }),
       version: PERSIST_STATE_VERSION,
       onRehydrateStorage: () => {
