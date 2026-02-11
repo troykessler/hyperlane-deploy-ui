@@ -27,9 +27,10 @@ const Home: NextPage = () => {
   const [currentConfig, setCurrentConfig] = useState<CoreConfig | null>(null);
   const [uploadError, setUploadError] = useState<string>('');
 
-  const { deployments, addDeployment } = useStore((s) => ({
+  const { deployments, addDeployment, customChains } = useStore((s) => ({
     deployments: s.deployments,
     addDeployment: s.addDeployment,
+    customChains: s.customChains,
   }));
 
   const multiProvider = useMultiProvider();
@@ -40,6 +41,7 @@ const Home: NextPage = () => {
   // State for Apply Updates tab
   const [editedConfig, setEditedConfig] = useState<CoreConfig | null>(null);
   const [applyError, setApplyError] = useState<string>('');
+  const [mailboxAddress, setMailboxAddress] = useState<string>('');
 
   // Wallet hooks
   const cosmosWallet = useCosmosWallet(selectedChain);
@@ -53,13 +55,24 @@ const Home: NextPage = () => {
     return metadata?.protocol || null;
   }, [selectedChain, multiProvider]);
 
-  // Auto-read config when chain is selected (for Apply Updates tab)
+  // Check if selected chain is a custom chain
+  const isCustomChain = useMemo(() => {
+    return selectedChain ? !!customChains[selectedChain] : false;
+  }, [selectedChain, customChains]);
+
+  // Clear mailbox address when chain changes
   useEffect(() => {
-    if (selectedChain && activeTab === 'apply') {
+    setMailboxAddress('');
+  }, [selectedChain]);
+
+  // Auto-read config when chain is selected (for Apply Updates tab)
+  // Skip auto-read for custom chains - they need manual mailbox address
+  useEffect(() => {
+    if (selectedChain && activeTab === 'apply' && !isCustomChain) {
       handleReadConfig();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedChain, activeTab]);
+  }, [selectedChain, activeTab, isCustomChain]);
 
   const getWalletClient = async () => {
     if (selectedProtocol === ProtocolType.CosmosNative) {
@@ -75,9 +88,16 @@ const Home: NextPage = () => {
   const handleReadConfig = async () => {
     if (!selectedChain) return;
 
+    // For custom chains, require mailbox address
+    if (isCustomChain && !mailboxAddress) {
+      setApplyError('Please provide the mailbox address for this custom chain');
+      return;
+    }
+
     try {
       // Read config - no wallet needed!
-      await readConfig(selectedChain);
+      // Only pass mailbox address for custom chains
+      await readConfig(selectedChain, isCustomChain ? mailboxAddress : undefined);
       setApplyError('');
     } catch (error) {
       setApplyError(`Failed to read config: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -327,6 +347,23 @@ const Home: NextPage = () => {
               />
             </div>
 
+            {/* Mailbox Address (for custom chains) */}
+            {isCustomChain && selectedChain && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">2. Mailbox Address</h3>
+                <input
+                  type="text"
+                  value={mailboxAddress}
+                  onChange={(e) => setMailboxAddress(e.target.value)}
+                  placeholder="Enter deployed mailbox contract address"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                />
+                <p className="mt-2 text-xs text-gray-500">
+                  Custom chains require the mailbox address to read existing configuration.
+                </p>
+              </div>
+            )}
+
             {/* Read Progress */}
             {selectedChain && (
               <div>
@@ -346,7 +383,9 @@ const Home: NextPage = () => {
             {/* Config Editor */}
             {readCoreConfig && (
               <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">2. Edit Configuration</h3>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">
+                  {isCustomChain ? '3' : '2'}. Edit Configuration
+                </h3>
                 <CoreConfigEditor
                   initialConfig={readCoreConfig}
                   onChange={setEditedConfig}

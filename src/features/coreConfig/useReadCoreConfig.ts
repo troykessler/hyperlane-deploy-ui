@@ -23,7 +23,7 @@ export function useReadCoreConfig() {
   const multiProvider = useMultiProvider();
 
   const readConfig = useCallback(
-    async (chainName: ChainName): Promise<CoreConfig | null> => {
+    async (chainName: ChainName, mailboxAddressOverride?: string): Promise<CoreConfig | null> => {
       try {
         setProgress({
           status: 'reading',
@@ -35,10 +35,13 @@ export function useReadCoreConfig() {
           throw new Error(`Chain metadata not found for ${chainName}`);
         }
 
-        // Get mailbox address from registry
-        const mailboxAddress = chainAddresses[chainName]?.mailbox;
+        // Get mailbox address from override, registry, or error
+        let mailboxAddress = mailboxAddressOverride;
         if (!mailboxAddress) {
-          throw new Error(`Mailbox address not found for ${chainName} in registry. Chain may not have Hyperlane deployed yet.`);
+          mailboxAddress = chainAddresses[chainName]?.mailbox;
+          if (!mailboxAddress) {
+            throw new Error(`Mailbox address not found for ${chainName} in registry. For custom chains, please provide the mailbox address manually.`);
+          }
         }
 
         const chainLookup = createChainLookup(multiProvider);
