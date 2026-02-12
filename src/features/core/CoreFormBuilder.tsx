@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { ChainName } from '@hyperlane-xyz/sdk';
 import { CoreConfig } from '@hyperlane-xyz/provider-sdk/core';
 import type { IsmConfig } from '@hyperlane-xyz/provider-sdk/ism';
 import type { HookConfig } from '@hyperlane-xyz/provider-sdk/hook';
@@ -7,11 +8,12 @@ import { WarpIsmConfigForm } from '../warp/WarpIsmConfigForm';
 import { WarpHookConfigForm } from '../warp/WarpHookConfigForm';
 
 interface CoreFormBuilderProps {
+  chainName?: ChainName;
   initialConfig?: CoreConfig | null;
   onChange: (config: CoreConfig | null) => void;
 }
 
-export function CoreFormBuilder({ initialConfig, onChange }: CoreFormBuilderProps) {
+export function CoreFormBuilder({ chainName, initialConfig, onChange }: CoreFormBuilderProps) {
   const [owner, setOwner] = useState(initialConfig?.owner || '');
   const [defaultIsm, setDefaultIsm] = useState<IsmConfig | string | undefined>(
     initialConfig?.defaultIsm
@@ -52,7 +54,7 @@ export function CoreFormBuilder({ initialConfig, onChange }: CoreFormBuilderProp
       {/* Step 1: Basic Configuration */}
       <div className="p-6 border border-gray-200 rounded-lg bg-white">
         <h3 className="text-sm font-semibold text-gray-900 mb-4">1. Basic Configuration</h3>
-        <CoreBaseFields owner={owner} onChange={setOwner} />
+        <CoreBaseFields owner={owner} onChange={setOwner} chainName={chainName} />
       </div>
 
       {/* Step 2: Default ISM */}

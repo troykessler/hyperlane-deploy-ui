@@ -393,6 +393,7 @@ const Home: NextPage = () => {
                 <div>
                   <h3 className="text-sm font-medium text-gray-700 mb-3">2. Configure Core Contracts</h3>
                   <CoreFormBuilder
+                    chainName={selectedChain}
                     initialConfig={currentConfig}
                     onChange={setCurrentConfig}
                   />
@@ -848,6 +849,7 @@ const Home: NextPage = () => {
                   {isCustomChain ? '3' : '2'}. Edit Configuration
                 </h3>
                 <CoreConfigEditor
+                  chainName={selectedChain}
                   initialConfig={readCoreConfig}
                   onChange={setEditedConfig}
                   onError={setApplyError}

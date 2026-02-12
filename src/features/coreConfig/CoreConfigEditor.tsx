@@ -1,9 +1,11 @@
 import { useState, useMemo } from 'react';
+import { ChainName } from '@hyperlane-xyz/sdk';
 import { CoreConfig } from '@hyperlane-xyz/provider-sdk/core';
 import { serializeYamlConfig, parseYamlConfig } from '../../utils/yaml';
 import { CoreFormBuilder } from '../core/CoreFormBuilder';
 
 interface CoreConfigEditorProps {
+  chainName?: ChainName;
   initialConfig: CoreConfig | null;
   onChange: (config: CoreConfig | null) => void;
   onError: (error: string) => void;
@@ -11,7 +13,7 @@ interface CoreConfigEditorProps {
 
 type EditorMode = 'form' | 'yaml';
 
-export function CoreConfigEditor({ initialConfig, onChange, onError }: CoreConfigEditorProps) {
+export function CoreConfigEditor({ chainName, initialConfig, onChange, onError }: CoreConfigEditorProps) {
   const [editorMode, setEditorMode] = useState<EditorMode>('form');
 
   // Serialize initial config to YAML
@@ -85,7 +87,7 @@ export function CoreConfigEditor({ initialConfig, onChange, onError }: CoreConfi
 
       {/* Form View */}
       {editorMode === 'form' && (
-        <CoreFormBuilder initialConfig={initialConfig} onChange={onChange} />
+        <CoreFormBuilder chainName={chainName} initialConfig={initialConfig} onChange={onChange} />
       )}
 
       {/* YAML View */}

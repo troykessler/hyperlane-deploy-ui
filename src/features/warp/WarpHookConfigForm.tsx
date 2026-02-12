@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { HookConfig } from '@hyperlane-xyz/provider-sdk/hook';
+import { IGPConfigFields } from './IGPConfigFields';
 
 type HookType = 'merkleTreeHook' | 'interchainGasPaymaster' | 'protocolFee';
 
@@ -20,8 +21,11 @@ export function WarpHookConfigForm({
   const [hookType, setHookType] = useState<HookType>('merkleTreeHook');
 
   // IGP-specific fields
-  const [beneficiary, setBeneficiary] = useState('');
-  const [gasOracle, setGasOracle] = useState('');
+  const [igpOwner, setIgpOwner] = useState('');
+  const [igpBeneficiary, setIgpBeneficiary] = useState('');
+  const [igpOracleKey, setIgpOracleKey] = useState('');
+  const [igpOverhead, setIgpOverhead] = useState<Record<string, string>>({});
+  const [igpOracleConfig, setIgpOracleConfig] = useState<Record<string, { gasPrice: string; tokenExchangeRate: string }>>({});
 
   // Protocol Fee fields
   const [maxProtocolFee, setMaxProtocolFee] = useState('');
@@ -36,8 +40,11 @@ export function WarpHookConfigForm({
       if (type) setHookType(type);
 
       if (type === 'interchainGasPaymaster') {
-        setBeneficiary((config as any).beneficiary || '');
-        setGasOracle((config as any).gasOracle || '');
+        setIgpOwner((config as any).owner || '');
+        setIgpBeneficiary((config as any).beneficiary || '');
+        setIgpOracleKey((config as any).oracleKey || '');
+        setIgpOverhead((config as any).overhead || {});
+        setIgpOracleConfig((config as any).oracleConfig || {});
       } else if (type === 'protocolFee') {
         setMaxProtocolFee((config as any).maxProtocolFee || '');
         setProtocolFeeValue((config as any).protocolFee || '');
@@ -72,8 +79,11 @@ export function WarpHookConfigForm({
       onChange({ type: 'merkleTreeHook' });
     } else if (type === 'interchainGasPaymaster') {
       const config: any = { type: 'interchainGasPaymaster' };
-      if (beneficiary) config.beneficiary = beneficiary;
-      if (gasOracle) config.gasOracle = gasOracle;
+      if (igpOwner) config.owner = igpOwner;
+      if (igpBeneficiary) config.beneficiary = igpBeneficiary;
+      if (igpOracleKey) config.oracleKey = igpOracleKey;
+      if (Object.keys(igpOverhead).length > 0) config.overhead = igpOverhead;
+      if (Object.keys(igpOracleConfig).length > 0) config.oracleConfig = igpOracleConfig;
       onChange(config);
     } else if (type === 'protocolFee') {
       const config: any = { type: 'protocolFee' };
@@ -84,13 +94,25 @@ export function WarpHookConfigForm({
     }
   };
 
-  const handleIGPFieldChange = (field: 'beneficiary' | 'gasOracle', value: string) => {
-    if (field === 'beneficiary') setBeneficiary(value);
-    else setGasOracle(value);
+  const handleIGPConfigChange = (igpConfig: {
+    owner: string;
+    beneficiary: string;
+    oracleKey: string;
+    overhead: Record<string, string>;
+    oracleConfig: Record<string, { gasPrice: string; tokenExchangeRate: string }>;
+  }) => {
+    setIgpOwner(igpConfig.owner);
+    setIgpBeneficiary(igpConfig.beneficiary);
+    setIgpOracleKey(igpConfig.oracleKey);
+    setIgpOverhead(igpConfig.overhead);
+    setIgpOracleConfig(igpConfig.oracleConfig);
 
     const config: any = { type: 'interchainGasPaymaster' };
-    if (field === 'beneficiary' ? value : beneficiary) config.beneficiary = field === 'beneficiary' ? value : beneficiary;
-    if (field === 'gasOracle' ? value : gasOracle) config.gasOracle = field === 'gasOracle' ? value : gasOracle;
+    if (igpConfig.owner) config.owner = igpConfig.owner;
+    if (igpConfig.beneficiary) config.beneficiary = igpConfig.beneficiary;
+    if (igpConfig.oracleKey) config.oracleKey = igpConfig.oracleKey;
+    if (Object.keys(igpConfig.overhead).length > 0) config.overhead = igpConfig.overhead;
+    if (Object.keys(igpConfig.oracleConfig).length > 0) config.oracleConfig = igpConfig.oracleConfig;
     onChange(config);
   };
 
@@ -163,37 +185,14 @@ export function WarpHookConfigForm({
                 <strong>Interchain Gas Paymaster</strong>: Handles gas payment for cross-chain messages.
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Beneficiary Address (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={beneficiary}
-                  onChange={(e) => handleIGPFieldChange('beneficiary', e.target.value)}
-                  placeholder="0x... (Address to receive gas payments)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  Address that will receive gas payment fees
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Gas Oracle Address (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={gasOracle}
-                  onChange={(e) => handleIGPFieldChange('gasOracle', e.target.value)}
-                  placeholder="0x... (Gas oracle contract address)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="mt-1 text-xs text-gray-500">
-                  Contract that provides gas price data for destination chains
-                </p>
-              </div>
+              <IGPConfigFields
+                owner={igpOwner}
+                beneficiary={igpBeneficiary}
+                oracleKey={igpOracleKey}
+                overhead={igpOverhead}
+                oracleConfig={igpOracleConfig}
+                onChange={handleIGPConfigChange}
+              />
             </div>
           )}
 
