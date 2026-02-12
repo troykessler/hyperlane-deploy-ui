@@ -28,6 +28,7 @@ import { WarpMultiChainWizard } from '../features/warp/WarpMultiChainWizard';
 import { WarpConfigPreview } from '../features/warp/WarpConfigPreview';
 import { useWarpDeploy } from '../features/warp/useWarpDeploy';
 import type { WarpConfig } from '../features/warp/types';
+import { WarpRouteSelect } from '../features/warpRoutes/WarpRouteSelect';
 import { CoreFormBuilder } from '../features/core/CoreFormBuilder';
 
 const Home: NextPage = () => {
@@ -820,16 +821,12 @@ const Home: NextPage = () => {
             {updateType === 'warp' && selectedChain && (
               <div>
                 <h3 className="text-sm font-medium text-gray-700 mb-3">2. Warp Route Address</h3>
-                <input
-                  type="text"
+                <WarpRouteSelect
+                  chainName={selectedChain}
                   value={warpRouteAddress}
-                  onChange={(e) => setWarpRouteAddress(e.target.value)}
-                  placeholder="Enter deployed warp route contract address"
+                  onChange={setWarpRouteAddress}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
                 />
-                <p className="mt-2 text-xs text-gray-500">
-                  Provide the warp route contract address to read and update its configuration.
-                </p>
               </div>
             )}
 
