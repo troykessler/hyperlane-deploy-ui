@@ -24,7 +24,7 @@ interface Config {
   shouldDisableChains: boolean; // Enable chain disabling for ChainSearchMenu. When true it will deactivate chains that have disabled status
   version: string; // Matches version number in package.json
   walletConnectProjectId: string; // Project ID provided by walletconnect
-  walletProtocols: ProtocolType[]; // Wallet Protocols to show in the wallet connect modal (CosmosNative, Radix, Aleo)
+  walletProtocols: ProtocolType[]; // Wallet Protocols to show in the wallet connect modal (Cosmos, Radix, Aleo)
   rpcOverrides: string; // JSON string containing a map of chain names to an object with an URL for RPC overrides (For an example check the .env.example file)
   enableTrackingEvents: boolean; // Allow tracking events to happen on some actions;
 }
@@ -42,7 +42,7 @@ export const config: Config = Object.freeze({
   version,
   walletConnectProjectId,
   walletProtocols: [
-    ProtocolType.CosmosNative,
+    ProtocolType.Cosmos,
     ProtocolType.Radix,
     ProtocolType.Aleo,
   ],

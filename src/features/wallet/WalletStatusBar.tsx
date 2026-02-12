@@ -1,5 +1,7 @@
 import { ProtocolType } from '@hyperlane-xyz/utils';
 import { ChainName } from '@hyperlane-xyz/sdk';
+import { ConnectButton } from '@rainbow-me/rainbowkit';
+import { useAccount, useDisconnect } from 'wagmi';
 import { useCosmosWallet } from './hooks/useCosmosWallet';
 import { useRadixWallet } from './hooks/useRadixWallet';
 import { useAleoWallet } from './hooks/useAleoWallet';
@@ -14,23 +16,34 @@ export function WalletStatusBar({ selectedChain, selectedProtocol }: WalletStatu
   const radixWallet = useRadixWallet();
   const aleoWallet = useAleoWallet();
 
+  // EVM wallet hooks
+  const { address: evmAddress, isConnected: evmIsConnected } = useAccount();
+  const { disconnect: evmDisconnect } = useDisconnect();
+
   // Determine which wallet to show based on protocol
   const getWalletInfo = () => {
     if (!selectedProtocol) {
-      return { isConnected: false, address: null, connect: null, disconnect: null, protocol: '' };
+      return { isConnected: false, address: null, connect: null, disconnect: null, protocol: '', isEvm: false };
     }
 
     switch (selectedProtocol) {
+      case ProtocolType.Ethereum:
+        return {
+          isConnected: evmIsConnected,
+          address: evmAddress,
+          connect: null, // EVM uses RainbowKit ConnectButton
+          disconnect: evmDisconnect,
+          protocol: 'EVM',
+          isEvm: true,
+        };
       case ProtocolType.CosmosNative:
         return {
           isConnected: !!cosmosWallet.address,
           address: cosmosWallet.address,
-          connect: async () => {
-            // Cosmos Kit handles connection via UI
-            console.log('Use Cosmos Kit UI to connect');
-          },
+          connect: cosmosWallet.connect, // Opens Cosmos Kit modal with wallet options
           disconnect: cosmosWallet.disconnect,
           protocol: 'Cosmos Native',
+          isEvm: false,
         };
       case ProtocolType.Radix:
         return {
@@ -39,6 +52,7 @@ export function WalletStatusBar({ selectedChain, selectedProtocol }: WalletStatu
           connect: radixWallet.connect,
           disconnect: null,
           protocol: 'Radix',
+          isEvm: false,
         };
       case ProtocolType.Aleo:
         return {
@@ -50,9 +64,10 @@ export function WalletStatusBar({ selectedChain, selectedProtocol }: WalletStatu
           },
           disconnect: aleoWallet.disconnect,
           protocol: 'Aleo',
+          isEvm: false,
         };
       default:
-        return { isConnected: false, address: null, connect: null, disconnect: null, protocol: '' };
+        return { isConnected: false, address: null, connect: null, disconnect: null, protocol: '', isEvm: false };
     }
   };
 
@@ -62,6 +77,26 @@ export function WalletStatusBar({ selectedChain, selectedProtocol }: WalletStatu
     return null;
   }
 
+  // For EVM, use RainbowKit's ConnectButton
+  if (wallet.isEvm) {
+    return (
+      <div className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-lg">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <div
+              className={`w-2 h-2 rounded-full ${
+                wallet.isConnected ? 'bg-green-500' : 'bg-gray-400'
+              }`}
+            />
+            <span className="text-sm font-medium text-gray-700">EVM Wallet</span>
+          </div>
+        </div>
+        <ConnectButton chainStatus="icon" showBalance={false} />
+      </div>
+    );
+  }
+
+  // For other protocols, use custom wallet UI
   return (
     <div className="flex items-center justify-between p-4 bg-gray-50 border border-gray-200 rounded-lg">
       <div className="flex items-center gap-3">

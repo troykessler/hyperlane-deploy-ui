@@ -10,6 +10,7 @@ import { useWalletConnectionTracking } from '../../features/analytics/useWalletC
 import { trackEvent } from '../../features/analytics/utils';
 import { useStore } from '../../features/store';
 import { SideBarMenu } from '../../features/wallet/SideBarMenu';
+import { WalletDebug } from '../../features/wallet/WalletDebug';
 import { Footer } from '../nav/Footer';
 import { Header } from '../nav/Header';
 
@@ -27,8 +28,15 @@ export function AppLayout({ children }: PropsWithChildren) {
     trackEvent(EVENT_NAME.PAGE_VIEWED, {});
   }, []);
 
+  useEffect(() => {
+    console.log('=== MODAL DEBUG ===');
+    console.log('showEnvSelectModal:', showEnvSelectModal);
+    console.log('config.walletProtocols:', config.walletProtocols);
+  }, [showEnvSelectModal]);
+
   return (
     <>
+      <WalletDebug />
       <Head>
         {/* https://nextjs.org/docs/messages/no-document-viewport-meta */}
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />

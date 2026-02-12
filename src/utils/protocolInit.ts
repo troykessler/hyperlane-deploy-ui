@@ -14,7 +14,14 @@ export function initializeAltVMProtocols() {
   if (isInitialized) return;
 
   // Register CosmosNative protocol
-  registerProtocol(ProtocolType.CosmosNative, () => new CosmosNativeProtocolProvider());
+  try {
+    registerProtocol(ProtocolType.CosmosNative, () => new CosmosNativeProtocolProvider());
+  } catch (error) {
+    // Protocol already registered, ignore
+    if (!(error instanceof Error && error.message.includes('already registered'))) {
+      throw error;
+    }
+  }
 
   // TODO: Register Radix protocol when available
   // registerProtocol(ProtocolType.Radix, () => new RadixProtocolProvider());

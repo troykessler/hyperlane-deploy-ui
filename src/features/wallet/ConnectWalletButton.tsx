@@ -16,7 +16,11 @@ export function ConnectWalletButton() {
   return (
     <ConnectWalletButtonInner
       multiProvider={multiProvider}
-      onClickWhenUnconnected={() => setShowEnvSelectModal(true)}
+      onClickWhenUnconnected={() => {
+        console.log('=== CONNECT WALLET CLICKED ===');
+        console.log('Setting showEnvSelectModal to true');
+        setShowEnvSelectModal(true);
+      }}
       onClickWhenConnected={() => setIsSideBarOpen(true)}
       className="rounded-lg bg-white"
       countClassName="bg-accent-500"
