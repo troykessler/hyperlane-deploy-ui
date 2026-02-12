@@ -254,6 +254,14 @@ const Home: NextPage = () => {
     }
   };
 
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      console.error('Failed to copy to clipboard', error);
+    }
+  };
+
   return (
     <div className="space-y-4 pt-4 max-w-4xl mx-auto px-4">
       {/* Tabs */}
@@ -262,8 +270,8 @@ const Home: NextPage = () => {
           onClick={() => setActiveTab('deploy')}
           className={`px-6 py-3 font-semibold transition-colors ${
             activeTab === 'deploy'
-              ? 'border-b-2 border-blue-500 text-blue-600'
-              : 'text-gray-900 hover:text-blue-600 font-semibold'
+              ? 'border-b-2 border-blue-500 text-blue-600 bg-white'
+              : 'text-gray-900 hover:text-gray-900 hover:bg-gray-100 font-semibold'
           }`}
         >
           Deploy Core
@@ -272,8 +280,8 @@ const Home: NextPage = () => {
           onClick={() => setActiveTab('warp')}
           className={`px-6 py-3 font-semibold transition-colors ${
             activeTab === 'warp'
-              ? 'border-b-2 border-blue-500 text-blue-600'
-              : 'text-gray-900 hover:text-blue-600 font-semibold'
+              ? 'border-b-2 border-blue-500 text-blue-600 bg-white'
+              : 'text-gray-900 hover:text-gray-900 hover:bg-gray-100 font-semibold'
           }`}
         >
           Deploy Warp
@@ -282,8 +290,8 @@ const Home: NextPage = () => {
           onClick={() => setActiveTab('view')}
           className={`px-6 py-3 font-semibold transition-colors ${
             activeTab === 'view'
-              ? 'border-b-2 border-blue-500 text-blue-600'
-              : 'text-gray-900 hover:text-blue-600 font-semibold'
+              ? 'border-b-2 border-blue-500 text-blue-600 bg-white'
+              : 'text-gray-900 hover:text-gray-900 hover:bg-gray-100 font-semibold'
           }`}
         >
           View Deployments ({deployments.length + warpDeployments.length})
@@ -292,8 +300,8 @@ const Home: NextPage = () => {
           onClick={() => setActiveTab('apply')}
           className={`px-6 py-3 font-semibold transition-colors ${
             activeTab === 'apply'
-              ? 'border-b-2 border-blue-500 text-blue-600'
-              : 'text-gray-900 hover:text-blue-600 font-semibold'
+              ? 'border-b-2 border-blue-500 text-blue-600 bg-white'
+              : 'text-gray-900 hover:text-gray-900 hover:bg-gray-100 font-semibold'
           }`}
         >
           Apply Updates
@@ -302,8 +310,8 @@ const Home: NextPage = () => {
           onClick={() => setActiveTab('chains')}
           className={`px-6 py-3 font-semibold transition-colors ${
             activeTab === 'chains'
-              ? 'border-b-2 border-blue-500 text-blue-600'
-              : 'text-gray-900 hover:text-blue-600 font-semibold'
+              ? 'border-b-2 border-blue-500 text-blue-600 bg-white'
+              : 'text-gray-900 hover:text-gray-900 hover:bg-gray-100 font-semibold'
           }`}
         >
           Manage Chains
@@ -566,18 +574,34 @@ const Home: NextPage = () => {
                                 {new Date(deployment.timestamp).toLocaleString()}
                               </p>
                               <div className="mt-3 space-y-1">
-                                <p className="text-xs text-gray-600">
-                                  <strong>Mailbox:</strong>{' '}
-                                  <code className="bg-gray-100 px-1 rounded">
-                                    {deployment.addresses.mailbox.slice(0, 10)}...
-                                  </code>
-                                </p>
-                                <p className="text-xs text-gray-600">
-                                  <strong>Validator Announce:</strong>{' '}
-                                  <code className="bg-gray-100 px-1 rounded">
-                                    {deployment.addresses.validatorAnnounce.slice(0, 10)}...
-                                  </code>
-                                </p>
+                                <div className="flex items-center justify-between text-xs text-gray-600">
+                                  <div>
+                                    <strong>Mailbox:</strong>{' '}
+                                    <code className="bg-gray-100 px-1 rounded">
+                                      {deployment.addresses.mailbox.slice(0, 10)}...{deployment.addresses.mailbox.slice(-8)}
+                                    </code>
+                                  </div>
+                                  <button
+                                    onClick={() => copyToClipboard(deployment.addresses.mailbox)}
+                                    className="ml-2 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded"
+                                  >
+                                    Copy
+                                  </button>
+                                </div>
+                                <div className="flex items-center justify-between text-xs text-gray-600">
+                                  <div>
+                                    <strong>Validator Announce:</strong>{' '}
+                                    <code className="bg-gray-100 px-1 rounded">
+                                      {deployment.addresses.validatorAnnounce.slice(0, 10)}...{deployment.addresses.validatorAnnounce.slice(-8)}
+                                    </code>
+                                  </div>
+                                  <button
+                                    onClick={() => copyToClipboard(deployment.addresses.validatorAnnounce)}
+                                    className="ml-2 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded"
+                                  >
+                                    Copy
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -613,19 +637,35 @@ const Home: NextPage = () => {
                                 {new Date(deployment.timestamp).toLocaleString()}
                               </p>
                               <div className="mt-3 space-y-1">
-                                <p className="text-xs text-gray-600">
-                                  <strong>Warp Route:</strong>{' '}
-                                  <code className="bg-gray-100 px-1 rounded">
-                                    {deployment.address.slice(0, 10)}...{deployment.address.slice(-8)}
-                                  </code>
-                                </p>
-                                {deployment.config.type === 'collateral' && (
-                                  <p className="text-xs text-gray-600">
-                                    <strong>Token:</strong>{' '}
+                                <div className="flex items-center justify-between text-xs text-gray-600">
+                                  <div>
+                                    <strong>Warp Route:</strong>{' '}
                                     <code className="bg-gray-100 px-1 rounded">
-                                      {deployment.config.token.slice(0, 10)}...
+                                      {deployment.address.slice(0, 10)}...{deployment.address.slice(-8)}
                                     </code>
-                                  </p>
+                                  </div>
+                                  <button
+                                    onClick={() => copyToClipboard(deployment.address)}
+                                    className="ml-2 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded"
+                                  >
+                                    Copy
+                                  </button>
+                                </div>
+                                {deployment.config.type === 'collateral' && (
+                                  <div className="flex items-center justify-between text-xs text-gray-600">
+                                    <div>
+                                      <strong>Token:</strong>{' '}
+                                      <code className="bg-gray-100 px-1 rounded">
+                                        {(deployment.config as any).token.slice(0, 10)}...{(deployment.config as any).token.slice(-8)}
+                                      </code>
+                                    </div>
+                                    <button
+                                      onClick={() => copyToClipboard((deployment.config as any).token)}
+                                      className="ml-2 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded"
+                                    >
+                                      Copy
+                                    </button>
+                                  </div>
                                 )}
                                 {deployment.config.type === 'synthetic' && deployment.config.name && (
                                   <p className="text-xs text-gray-600">

@@ -6,7 +6,7 @@ This file provides guidance to AI coding assistants when working with code in th
 
 ## Project Overview
 
-Hyperlane Warp UI Template is a Next.js web application for cross-chain token transfers using [Hyperlane Warp Routes](https://docs.hyperlane.xyz/docs/reference/applications/warp-routes). It enables permissionless bridging of tokens between any supported blockchain.
+Hyperlane Deploy UI is a Next.js web application for cross-chain token transfers using [Hyperlane Warp Routes](https://docs.hyperlane.xyz/docs/reference/applications/warp-routes). It enables permissionless bridging of tokens between any supported blockchain.
 
 ## Plan Mode
 
@@ -29,6 +29,7 @@ pnpm clean            # Remove build artifacts (dist, cache, .next)
 ## Architecture
 
 ### Stack
+
 - **Framework**: Next.js 15 with React 18
 - **Styling**: Tailwind CSS + Chakra UI
 - **State**: Zustand with persist middleware (`src/features/store.ts`)
@@ -64,6 +65,7 @@ pnpm clean            # Remove build artifacts (dist, cache, .next)
 ### Configuration
 
 Environment variables (see `.env.example`):
+
 - `NEXT_PUBLIC_WALLET_CONNECT_ID` - **Required** for wallet connections
 - `NEXT_PUBLIC_REGISTRY_URL` - **Optional** custom Hyperlane registry URL
 - `NEXT_PUBLIC_RPC_OVERRIDES` - **Optional** JSON map of chain RPC overrides
@@ -71,6 +73,7 @@ Environment variables (see `.env.example`):
 ## Customization
 
 See `CUSTOMIZE.md` for detailed customization instructions:
+
 - **Warp Routes**: `src/consts/warpRoutes.yaml` + `warpRouteWhitelist.ts`
 - **Chains**: `src/consts/chains.yaml` or `chains.ts`
 - **Branding**: `src/consts/app.ts`, `tailwind.config.js`, logo files in `src/images/logos/`
@@ -94,19 +97,22 @@ pnpm vitest --watch
 ## Engineering Philosophy
 
 ### Keep It Simple
+
 We handle ONLY the most important cases. Don't add functionality unless it's small or absolutely necessary.
 
 ### Error Handling
+
 - **Expected issues** (external systems, user input): Use explicit error handling, try/catch at boundaries
 - **Unexpected issues** (invalid state, broken invariants): Fail loudly with `throw` or `console.error`
 - **NEVER** add silent fallbacks for unexpected issues - they mask bugs
 
 ### Backwards-Compatibility
-| Change Location | Backwards-Compat? | Rationale |
-|-----------------|-------------------|-----------|
-| Local/uncommitted | No | Iteration speed; no external impact |
-| In main unreleased | Preferred | Minimize friction for other developers |
-| Released | Required | Prevent breaking downstream integrations |
+
+| Change Location    | Backwards-Compat? | Rationale                                |
+| ------------------ | ----------------- | ---------------------------------------- |
+| Local/uncommitted  | No                | Iteration speed; no external impact      |
+| In main unreleased | Preferred         | Minimize friction for other developers   |
+| Released           | Required          | Prevent breaking downstream integrations |
 
 ## Code Review
 
