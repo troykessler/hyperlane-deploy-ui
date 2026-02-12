@@ -30,9 +30,10 @@ import { useWarpDeploy } from '../features/warp/useWarpDeploy';
 import type { WarpConfig } from '../features/warp/types';
 import { WarpRouteSelect } from '../features/warpRoutes/WarpRouteSelect';
 import { CoreFormBuilder } from '../features/core/CoreFormBuilder';
+import { WarpRoutesGraph } from '../features/warpMap';
 
 const Home: NextPage = () => {
-  const [activeTab, setActiveTab] = useState<'deploy' | 'warp' | 'view' | 'apply' | 'chains'>('deploy');
+  const [activeTab, setActiveTab] = useState<'deploy' | 'warp' | 'view' | 'apply' | 'chains' | 'map'>('deploy');
   const [selectedChain, setSelectedChain] = useState<ChainName>('');
   const [currentConfig, setCurrentConfig] = useState<CoreConfig | null>(null);
   const [uploadError, setUploadError] = useState<string>('');
@@ -320,6 +321,16 @@ const Home: NextPage = () => {
           }`}
         >
           Manage Chains
+        </button>
+        <button
+          onClick={() => setActiveTab('map')}
+          className={`px-6 py-3 font-semibold transition-colors ${
+            activeTab === 'map'
+              ? 'border-b-2 border-blue-500 text-blue-600 bg-white'
+              : 'text-gray-900 hover:text-gray-900 hover:bg-gray-100 font-semibold'
+          }`}
+        >
+          Explorer Map
         </button>
       </div>
 
@@ -1000,6 +1011,30 @@ const Home: NextPage = () => {
               Custom chains are stored locally in your browser.
             </p>
             <CustomChainsList />
+          </div>
+        )}
+
+        {activeTab === 'map' && (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-gray-900">Warp Routes Explorer</h2>
+            <p className="text-gray-600">
+              Interactive graph visualization of warp routes. Click chains to view core configs,
+              or click warp route edges to read and edit warp configurations.
+            </p>
+            <WarpRoutesGraph
+              useTestData={false}
+              onChainClick={(chain) => {
+                setSelectedChain(chain);
+                setActiveTab('view');
+                readConfig(chain);
+              }}
+              onWarpRouteClick={(sourceChain, _targetChain, _routeId, address) => {
+                setSelectedChain(sourceChain);
+                setWarpRouteAddress(address);
+                setUpdateType('warp');
+                setActiveTab('apply');
+              }}
+            />
           </div>
         )}
       </div>
