@@ -28,12 +28,16 @@ import { WarpMultiChainWizard } from '../features/warp/WarpMultiChainWizard';
 import { WarpConfigPreview } from '../features/warp/WarpConfigPreview';
 import { useWarpDeploy } from '../features/warp/useWarpDeploy';
 import type { WarpConfig } from '../features/warp/types';
+import { CoreFormBuilder } from '../features/core/CoreFormBuilder';
 
 const Home: NextPage = () => {
   const [activeTab, setActiveTab] = useState<'deploy' | 'warp' | 'view' | 'apply' | 'chains'>('deploy');
   const [selectedChain, setSelectedChain] = useState<ChainName>('');
   const [currentConfig, setCurrentConfig] = useState<CoreConfig | null>(null);
   const [uploadError, setUploadError] = useState<string>('');
+
+  // Core-specific state
+  const [coreInputMethod, setCoreInputMethod] = useState<'upload' | 'builder'>('builder');
 
   // Warp-specific state
   const [warpInputMethod, setWarpInputMethod] = useState<'upload' | 'builder' | 'multichain'>('builder');
@@ -329,45 +333,86 @@ const Home: NextPage = () => {
             {/* Wallet Status */}
             <WalletStatusBar selectedChain={selectedChain} selectedProtocol={selectedProtocol} />
 
-            {/* Config Upload */}
+            {/* Input Method Selector */}
             <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-3">1. Upload Configuration</h3>
-              <ConfigUpload
-                onConfigLoaded={setCurrentConfig}
-                onError={setUploadError}
-              />
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Choose Input Method
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => setCoreInputMethod('builder')}
+                  className={`px-4 py-3 rounded-lg border-2 font-medium transition-all ${
+                    coreInputMethod === 'builder'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                  }`}
+                >
+                  Form Builder
+                </button>
+                <button
+                  onClick={() => setCoreInputMethod('upload')}
+                  className={`px-4 py-3 rounded-lg border-2 font-medium transition-all ${
+                    coreInputMethod === 'upload'
+                      ? 'border-blue-500 bg-blue-50 text-blue-700'
+                      : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                  }`}
+                >
+                  Upload YAML
+                </button>
+              </div>
             </div>
 
-            {/* Config Preview */}
-            {currentConfig && (
-              <ConfigPreview config={currentConfig} />
+            {/* Upload Method */}
+            {coreInputMethod === 'upload' && (
+              <>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">1. Upload Configuration</h3>
+                  <ConfigUpload
+                    onConfigLoaded={setCurrentConfig}
+                    onError={setUploadError}
+                  />
+                </div>
+
+                {currentConfig && <ConfigPreview config={currentConfig} />}
+
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">2. Select Target Chain</h3>
+                  <ChainSelectField value={selectedChain} onChange={setSelectedChain} label="" />
+                </div>
+              </>
             )}
 
-            {/* Chain Selection */}
-            <div>
-              <h3 className="text-sm font-medium text-gray-700 mb-3">2. Select Target Chain</h3>
-              <ChainSelectField
-                value={selectedChain}
-                onChange={setSelectedChain}
-                label=""
-              />
-            </div>
+            {/* Form Builder Method */}
+            {coreInputMethod === 'builder' && (
+              <>
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">1. Select Target Chain</h3>
+                  <ChainSelectField value={selectedChain} onChange={setSelectedChain} label="" />
+                </div>
 
-            {/* Progress */}
+                <div>
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">2. Configure Core Contracts</h3>
+                  <CoreFormBuilder
+                    initialConfig={currentConfig}
+                    onChange={setCurrentConfig}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Deploy Button */}
             <DeployProgress
               status={progress.status}
               message={progress.message}
               error={progress.error}
             />
 
-            {/* Error Display */}
             {uploadError && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
                 {uploadError}
               </div>
             )}
 
-            {/* Deploy Button */}
             <button
               onClick={handleDeploy}
               disabled={!selectedChain || !currentConfig || isDeploying}
@@ -380,8 +425,7 @@ const Home: NextPage = () => {
               {isDeploying ? 'Deploying...' : 'Deploy Core Contracts'}
             </button>
 
-            {/* Info */}
-            <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-800">
                 <strong>Note:</strong> This will deploy the Hyperlane core contracts (Mailbox, ISM, Hooks) to the selected chain.
                 Make sure your wallet is connected and has sufficient funds for gas.
