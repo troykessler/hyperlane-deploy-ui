@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { ChainName } from '@hyperlane-xyz/sdk';
 import type { HookConfig } from '@hyperlane-xyz/provider-sdk/hook';
 import { IGPConfigFields } from './IGPConfigFields';
 
@@ -9,6 +10,7 @@ interface WarpHookConfigFormProps {
   onChange: (config: HookConfig | string | undefined) => void;
   useAddress: boolean;
   onToggleAddress: (useAddress: boolean) => void;
+  chainName?: ChainName;
 }
 
 export function WarpHookConfigForm({
@@ -16,6 +18,7 @@ export function WarpHookConfigForm({
   onChange,
   useAddress,
   onToggleAddress,
+  chainName,
 }: WarpHookConfigFormProps) {
   const [hookAddress, setHookAddress] = useState('');
   const [hookType, setHookType] = useState<HookType>('merkleTreeHook');
@@ -200,6 +203,7 @@ export function WarpHookConfigForm({
                 overhead={igpOverhead}
                 oracleConfig={igpOracleConfig}
                 onChange={handleIGPConfigChange}
+                chainName={chainName}
               />
             </div>
           )}

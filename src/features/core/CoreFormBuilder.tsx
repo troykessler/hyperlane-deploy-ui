@@ -80,6 +80,7 @@ export function CoreFormBuilder({ chainName, initialConfig, onChange }: CoreForm
           onChange={setDefaultHook}
           useAddress={defaultHookUseAddress}
           onToggleAddress={setDefaultHookUseAddress}
+          chainName={chainName}
         />
       </div>
 
@@ -98,6 +99,7 @@ export function CoreFormBuilder({ chainName, initialConfig, onChange }: CoreForm
           onChange={setRequiredHook}
           useAddress={requiredHookUseAddress}
           onToggleAddress={setRequiredHookUseAddress}
+          chainName={chainName}
         />
       </div>
     </div>

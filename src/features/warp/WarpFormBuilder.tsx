@@ -144,7 +144,12 @@ export function WarpFormBuilder({ chainName, initialConfig, onChange }: WarpForm
       {/* Step 2: Basic Configuration */}
       <div className="p-6 border border-gray-200 rounded-lg bg-white">
         <h3 className="text-sm font-semibold text-gray-900 mb-4">2. Basic Configuration</h3>
-        <WarpBaseFields owner={owner} mailbox={mailbox} onChange={handleBaseFieldChange} />
+        <WarpBaseFields
+          owner={owner}
+          mailbox={mailbox}
+          onChange={handleBaseFieldChange}
+          chainName={chainName}
+        />
       </div>
 
       {/* Step 3: Token-Specific Configuration */}
