@@ -414,6 +414,29 @@ const Home: NextPage = () => {
               </div>
             )}
 
+            {/* Validation errors */}
+            {!currentConfig && coreInputMethod === 'builder' && selectedChain && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-sm font-medium text-amber-900 mb-2">Complete all required fields:</p>
+                <ul className="text-sm text-amber-800 list-disc list-inside space-y-1">
+                  <li><strong>Owner Address</strong> - Address that will own the core contracts</li>
+                  <li><strong>Default ISM</strong> - Configure validators (at least one) or use existing ISM address</li>
+                  <li><strong>Default Hook</strong> - Required for all outbound messages (auto-filled with Merkle Tree Hook)</li>
+                  <li><strong>Required Hook</strong> - Enforced for all outbound messages (auto-filled with Merkle Tree Hook)</li>
+                </ul>
+                <p className="mt-2 text-xs text-amber-700">
+                  Note: Hooks are auto-filled with default values. Make sure to configure the ISM and enter validator addresses.
+                </p>
+              </div>
+            )}
+            {!selectedChain && coreInputMethod === 'builder' && (
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-sm text-amber-800">
+                  <strong>Select a target chain</strong> to begin configuration
+                </p>
+              </div>
+            )}
+
             <button
               onClick={handleDeploy}
               disabled={!selectedChain || !currentConfig || isDeploying}

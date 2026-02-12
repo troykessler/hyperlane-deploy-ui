@@ -67,7 +67,14 @@ export function CoreFormBuilder({ chainName, initialConfig, onChange }: CoreForm
 
       {/* Step 3: Default Hook */}
       <div className="p-6 border border-gray-200 rounded-lg bg-white">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4">3. Default Hook</h3>
+        <h3 className="text-sm font-semibold text-gray-900 mb-4">
+          3. Default Hook <span className="text-red-500">*</span>
+        </h3>
+        <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="text-xs text-amber-800">
+            <strong>Required for core deployments.</strong> This hook processes all outbound messages by default.
+          </p>
+        </div>
         <WarpHookConfigForm
           config={defaultHook}
           onChange={setDefaultHook}
@@ -78,7 +85,14 @@ export function CoreFormBuilder({ chainName, initialConfig, onChange }: CoreForm
 
       {/* Step 4: Required Hook */}
       <div className="p-6 border border-gray-200 rounded-lg bg-white">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4">4. Required Hook</h3>
+        <h3 className="text-sm font-semibold text-gray-900 mb-4">
+          4. Required Hook <span className="text-red-500">*</span>
+        </h3>
+        <div className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <p className="text-xs text-amber-800">
+            <strong>Required for core deployments.</strong> This hook is enforced for all outbound messages.
+          </p>
+        </div>
         <WarpHookConfigForm
           config={requiredHook}
           onChange={setRequiredHook}

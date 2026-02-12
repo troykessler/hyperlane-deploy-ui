@@ -53,6 +53,14 @@ export function WarpHookConfigForm({
     }
   }, [config]);
 
+  // Build initial config when in builder mode (not using address)
+  useEffect(() => {
+    if (!useAddress && !config) {
+      // Build default merkleTreeHook config on mount
+      onChange({ type: 'merkleTreeHook' });
+    }
+  }, [useAddress, config, onChange]);
+
   const handleToggle = (checked: boolean) => {
     onToggleAddress(checked);
     if (checked) {

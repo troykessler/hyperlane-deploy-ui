@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
+import { ChainName } from '@hyperlane-xyz/sdk';
+import { useMultiProvider } from '../chains/hooks';
 
 interface IGPConfigFieldsProps {
   owner: string;
@@ -23,12 +25,37 @@ export function IGPConfigFields({
   oracleConfig,
   onChange,
 }: IGPConfigFieldsProps) {
-  const [newOverheadDomain, setNewOverheadDomain] = useState('');
+  const multiProvider = useMultiProvider();
+
+  const [newOverheadChain, setNewOverheadChain] = useState<ChainName>('');
   const [newOverheadGas, setNewOverheadGas] = useState('');
 
-  const [newOracleDomain, setNewOracleDomain] = useState('');
+  const [newOracleChain, setNewOracleChain] = useState<ChainName>('');
   const [newOracleGasPrice, setNewOracleGasPrice] = useState('');
   const [newOracleExchangeRate, setNewOracleExchangeRate] = useState('');
+
+  // Get all available chains
+  const availableChains = useMemo(() => {
+    return multiProvider.getKnownChainNames().sort();
+  }, [multiProvider]);
+
+  // Helper to get domain ID from chain name
+  const getDomainId = (chainName: ChainName): string => {
+    const metadata = multiProvider.tryGetChainMetadata(chainName);
+    return metadata?.domainId?.toString() || '';
+  };
+
+  // Helper to get chain name from domain ID
+  const getChainName = (domainId: string): ChainName | null => {
+    const chains = multiProvider.getKnownChainNames();
+    for (const chain of chains) {
+      const metadata = multiProvider.tryGetChainMetadata(chain);
+      if (metadata?.domainId?.toString() === domainId) {
+        return chain;
+      }
+    }
+    return null;
+  };
 
   const updateConfig = (updates: Partial<{
     owner: string;
@@ -48,15 +75,18 @@ export function IGPConfigFields({
   };
 
   const addOverhead = () => {
-    if (newOverheadDomain && newOverheadGas) {
-      updateConfig({
-        overhead: {
-          ...overhead,
-          [newOverheadDomain]: newOverheadGas,
-        },
-      });
-      setNewOverheadDomain('');
-      setNewOverheadGas('');
+    if (newOverheadChain && newOverheadGas) {
+      const domainId = getDomainId(newOverheadChain);
+      if (domainId) {
+        updateConfig({
+          overhead: {
+            ...overhead,
+            [domainId]: newOverheadGas,
+          },
+        });
+        setNewOverheadChain('');
+        setNewOverheadGas('');
+      }
     }
   };
 
@@ -66,19 +96,22 @@ export function IGPConfigFields({
   };
 
   const addOracleConfig = () => {
-    if (newOracleDomain && newOracleGasPrice && newOracleExchangeRate) {
-      updateConfig({
-        oracleConfig: {
-          ...oracleConfig,
-          [newOracleDomain]: {
-            gasPrice: newOracleGasPrice,
-            tokenExchangeRate: newOracleExchangeRate,
+    if (newOracleChain && newOracleGasPrice && newOracleExchangeRate) {
+      const domainId = getDomainId(newOracleChain);
+      if (domainId) {
+        updateConfig({
+          oracleConfig: {
+            ...oracleConfig,
+            [domainId]: {
+              gasPrice: newOracleGasPrice,
+              tokenExchangeRate: newOracleExchangeRate,
+            },
           },
-        },
-      });
-      setNewOracleDomain('');
-      setNewOracleGasPrice('');
-      setNewOracleExchangeRate('');
+        });
+        setNewOracleChain('');
+        setNewOracleGasPrice('');
+        setNewOracleExchangeRate('');
+      }
     }
   };
 
@@ -149,32 +182,42 @@ export function IGPConfigFields({
         {/* Existing overhead entries */}
         {Object.entries(overhead).length > 0 && (
           <div className="mb-3 space-y-2">
-            {Object.entries(overhead).map(([domain, gas]) => (
-              <div key={domain} className="flex items-center gap-2 p-2 bg-gray-50 rounded border border-gray-200">
-                <span className="text-sm font-mono flex-1">
-                  Domain {domain}: {gas} gas
-                </span>
-                <button
-                  type="button"
-                  onClick={() => removeOverhead(domain)}
-                  className="px-2 py-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded"
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
+            {Object.entries(overhead).map(([domain, gas]) => {
+              const chainName = getChainName(domain);
+              return (
+                <div key={domain} className="flex items-center gap-2 p-2 bg-gray-50 rounded border border-gray-200">
+                  <span className="text-sm flex-1">
+                    <span className="font-medium">{chainName || `Domain ${domain}`}</span>
+                    {chainName && <span className="text-gray-500 text-xs ml-2">(domain: {domain})</span>}
+                    : {gas} gas
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeOverhead(domain)}
+                    className="px-2 py-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded"
+                  >
+                    Remove
+                  </button>
+                </div>
+              );
+            })}
           </div>
         )}
 
         {/* Add new overhead */}
         <div className="flex gap-2">
-          <input
-            type="text"
-            value={newOverheadDomain}
-            onChange={(e) => setNewOverheadDomain(e.target.value)}
-            placeholder="Domain ID"
-            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+          <select
+            value={newOverheadChain}
+            onChange={(e) => setNewOverheadChain(e.target.value as ChainName)}
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          >
+            <option value="">Select chain...</option>
+            {availableChains.map((chain) => (
+              <option key={chain} value={chain}>
+                {chain}
+              </option>
+            ))}
+          </select>
           <input
             type="text"
             value={newOverheadGas}
@@ -185,7 +228,8 @@ export function IGPConfigFields({
           <button
             type="button"
             onClick={addOverhead}
-            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+            disabled={!newOverheadChain || !newOverheadGas}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
             Add
           </button>
@@ -204,36 +248,47 @@ export function IGPConfigFields({
         {/* Existing oracle configs */}
         {Object.entries(oracleConfig).length > 0 && (
           <div className="mb-3 space-y-2">
-            {Object.entries(oracleConfig).map(([domain, config]) => (
-              <div key={domain} className="p-3 bg-gray-50 rounded border border-gray-200">
-                <div className="flex items-start justify-between mb-1">
-                  <span className="text-sm font-medium">Domain {domain}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeOracleConfig(domain)}
-                    className="px-2 py-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded"
-                  >
-                    Remove
-                  </button>
+            {Object.entries(oracleConfig).map(([domain, config]) => {
+              const chainName = getChainName(domain);
+              return (
+                <div key={domain} className="p-3 bg-gray-50 rounded border border-gray-200">
+                  <div className="flex items-start justify-between mb-1">
+                    <div className="text-sm">
+                      <span className="font-medium">{chainName || `Domain ${domain}`}</span>
+                      {chainName && <span className="text-gray-500 text-xs ml-2">(domain: {domain})</span>}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => removeOracleConfig(domain)}
+                      className="px-2 py-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <div className="text-xs font-mono text-gray-600 space-y-1">
+                    <div>Gas Price: {config.gasPrice}</div>
+                    <div>Exchange Rate: {config.tokenExchangeRate}</div>
+                  </div>
                 </div>
-                <div className="text-xs font-mono text-gray-600 space-y-1">
-                  <div>Gas Price: {config.gasPrice}</div>
-                  <div>Exchange Rate: {config.tokenExchangeRate}</div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
         {/* Add new oracle config */}
         <div className="space-y-2">
-          <input
-            type="text"
-            value={newOracleDomain}
-            onChange={(e) => setNewOracleDomain(e.target.value)}
-            placeholder="Domain ID"
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          />
+          <select
+            value={newOracleChain}
+            onChange={(e) => setNewOracleChain(e.target.value as ChainName)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+          >
+            <option value="">Select chain...</option>
+            {availableChains.map((chain) => (
+              <option key={chain} value={chain}>
+                {chain}
+              </option>
+            ))}
+          </select>
           <div className="flex gap-2">
             <input
               type="text"
@@ -253,7 +308,8 @@ export function IGPConfigFields({
           <button
             type="button"
             onClick={addOracleConfig}
-            className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+            disabled={!newOracleChain || !newOracleGasPrice || !newOracleExchangeRate}
+            className="w-full px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
           >
             Add Oracle Config
           </button>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { IsmConfig } from '@hyperlane-xyz/provider-sdk/ism';
 
 interface WarpIsmConfigFormProps {
@@ -21,6 +21,13 @@ export function WarpIsmConfigForm({ value, onChange }: WarpIsmConfigFormProps) {
   const [threshold, setThreshold] = useState(
     existingConfig && 'threshold' in existingConfig ? existingConfig.threshold : 1
   );
+
+  // Auto-build config when dependencies change
+  useEffect(() => {
+    if (useAddress) return;
+    buildAndSetConfig();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ismType, validators, threshold, useAddress]);
 
   const handleToggle = (checked: boolean) => {
     setUseAddress(checked);
@@ -60,10 +67,6 @@ export function WarpIsmConfigForm({ value, onChange }: WarpIsmConfigFormProps) {
     const newValidators = [...validators];
     newValidators[index] = value;
     setValidators(newValidators);
-
-    if (!useAddress) {
-      setTimeout(buildAndSetConfig, 0);
-    }
   };
 
   const addValidator = () => {
@@ -73,22 +76,14 @@ export function WarpIsmConfigForm({ value, onChange }: WarpIsmConfigFormProps) {
   const removeValidator = (index: number) => {
     const newValidators = validators.filter((_, i) => i !== index);
     setValidators(newValidators.length > 0 ? newValidators : ['']);
-
-    if (!useAddress) {
-      setTimeout(buildAndSetConfig, 0);
-    }
   };
 
   const handleTypeChange = (type: typeof ismType) => {
     setIsmType(type);
-    setTimeout(buildAndSetConfig, 0);
   };
 
   const handleThresholdChange = (value: number) => {
     setThreshold(value);
-    if (!useAddress) {
-      setTimeout(buildAndSetConfig, 0);
-    }
   };
 
   return (
