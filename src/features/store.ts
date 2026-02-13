@@ -32,6 +32,9 @@ initializeAltVMProtocols();
 // Increment this when persist state has breaking changes
 const PERSIST_STATE_VERSION = 3;
 
+export type DeploymentStatus = 'pending' | 'deploying' | 'success' | 'failed';
+export type DeploymentType = 'core' | 'warp' | 'update';
+
 export interface DeploymentRecord {
   id: string;
   chainName: ChainName;
@@ -39,6 +42,9 @@ export interface DeploymentRecord {
   addresses: DeployedCoreAddresses;
   config: CoreConfig;
   txHashes: string[];
+  status: DeploymentStatus;
+  type: DeploymentType;
+  error?: string;
 }
 
 export type ConfigInputMethod = 'upload' | 'builder';

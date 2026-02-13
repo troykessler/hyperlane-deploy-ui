@@ -12,7 +12,8 @@ interface WalletStatusBarProps {
 }
 
 export function WalletStatusBar({ selectedChain, selectedProtocol }: WalletStatusBarProps) {
-  const cosmosWallet = useCosmosWallet(selectedChain);
+  // Only pass chain to hook if protocol matches
+  const cosmosWallet = useCosmosWallet(selectedProtocol === ProtocolType.CosmosNative ? selectedChain : undefined);
   const radixWallet = useRadixWallet();
   const aleoWallet = useAleoWallet();
 

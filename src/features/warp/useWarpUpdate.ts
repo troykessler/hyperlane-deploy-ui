@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ChainName } from '@hyperlane-xyz/sdk';
+import { ChainName, EvmWarpModule } from '@hyperlane-xyz/sdk';
 import { AltVMWarpModule } from '@hyperlane-xyz/deploy-sdk';
 import { useMultiProvider } from '../chains/hooks';
 import { createChainLookup } from '../../utils/chainLookup';
@@ -7,6 +7,8 @@ import { createAltVMSigner } from '../../utils/signerAdapters';
 import { logger } from '../../utils/logger';
 import type { WarpConfig } from './types';
 import { validateWarpConfig } from './validation';
+import { isEvmChain } from '../../utils/protocolUtils';
+import { providers } from 'ethers';
 
 interface UpdateProgress {
   status: 'idle' | 'validating' | 'applying' | 'success' | 'error';
@@ -42,9 +44,6 @@ export function useWarpUpdate() {
           throw new Error(`Chain metadata not found for ${chainName}`);
         }
 
-        const chainLookup = createChainLookup(multiProvider);
-        const signer = await createAltVMSigner(chainMetadata, walletClient);
-
         setProgress({
           status: 'applying',
           message: 'Applying configuration updates...',
@@ -52,16 +51,41 @@ export function useWarpUpdate() {
 
         logger.debug('Creating warp module for update', { chainName, warpRouteAddress });
 
-        // Create module instance with existing deployment address
-        const module = new AltVMWarpModule(chainLookup, signer, {
-          chain: chainName,
-          addresses: { deployedTokenRoute: warpRouteAddress },
-          config,
-        });
+        if (isEvmChain(chainMetadata)) {
+          // EVM chain: use EvmWarpModule
+          const evmMultiProvider = multiProvider.toMultiProvider();
 
-        logger.debug('Applying warp config update', { chainName, config });
+          // Set signer from wallet client
+          if (walletClient && typeof walletClient.getSigner === 'function') {
+            const signer = await walletClient.getSigner();
+            evmMultiProvider.setSharedSigner(signer);
+          } else if (walletClient instanceof providers.Signer) {
+            evmMultiProvider.setSharedSigner(walletClient);
+          }
 
-        await module.update(config);
+          const module = await EvmWarpModule.create({
+            chain: chainName,
+            config: config as any,
+            multiProvider: evmMultiProvider,
+            addresses: { deployedTokenRoute: warpRouteAddress },
+          });
+
+          logger.debug('Applying warp config update (EVM)', { chainName, config });
+          await module.update(config as any);
+        } else {
+          // AltVM chain: use AltVMWarpModule
+          const chainLookup = createChainLookup(multiProvider);
+          const signer = await createAltVMSigner(chainMetadata, walletClient);
+
+          const module = new AltVMWarpModule(chainLookup, signer, {
+            chain: chainName,
+            addresses: { deployedTokenRoute: warpRouteAddress },
+            config,
+          });
+
+          logger.debug('Applying warp config update (AltVM)', { chainName, config });
+          await module.update(config);
+        }
 
         logger.debug('Warp config update successful', { chainName });
 

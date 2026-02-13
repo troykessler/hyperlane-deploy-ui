@@ -1,11 +1,13 @@
 import { useState, useCallback } from 'react';
-import { ChainName } from '@hyperlane-xyz/sdk';
+import { ChainName, EvmCoreModule } from '@hyperlane-xyz/sdk';
 import { CoreConfig } from '@hyperlane-xyz/provider-sdk/core';
 import { AltVMCoreModule } from '@hyperlane-xyz/deploy-sdk';
 import { useMultiProvider } from '../chains/hooks';
 import { createChainLookup } from '../../utils/chainLookup';
 import { createAltVMSigner } from '../../utils/signerAdapters';
 import { logger } from '../../utils/logger';
+import { isEvmChain } from '../../utils/protocolUtils';
+import { providers } from 'ethers';
 
 interface ApplyProgress {
   status: 'idle' | 'validating' | 'applying' | 'success' | 'error';
@@ -37,9 +39,6 @@ export function useApplyCoreConfig() {
           throw new Error(`Chain metadata not found for ${chainName}`);
         }
 
-        const chainLookup = createChainLookup(multiProvider);
-        const signer = await createAltVMSigner(chainMetadata, walletClient);
-
         setProgress({
           status: 'applying',
           message: 'Applying configuration updates...',
@@ -47,17 +46,43 @@ export function useApplyCoreConfig() {
 
         logger.debug('Creating core module for update', { chainName });
 
-        // Create module with the new config to apply
-        const coreModule = await AltVMCoreModule.create({
-          chain: chainName,
-          config: newConfig,
-          chainLookup,
-          signer,
-        });
+        let txs: any[];
 
-        logger.debug('Applying config update', { chainName, newConfig });
+        if (isEvmChain(chainMetadata)) {
+          // EVM chain: use EvmCoreModule
+          const evmMultiProvider = multiProvider.toMultiProvider();
 
-        const txs = await coreModule.update(newConfig);
+          // Set signer from wallet client (ethers Signer)
+          if (walletClient && typeof walletClient.getSigner === 'function') {
+            const signer = await walletClient.getSigner();
+            evmMultiProvider.setSharedSigner(signer);
+          } else if (walletClient instanceof providers.Signer) {
+            evmMultiProvider.setSharedSigner(walletClient);
+          }
+
+          const coreModule = await EvmCoreModule.create({
+            chain: chainName,
+            config: newConfig,
+            multiProvider: evmMultiProvider,
+          });
+
+          logger.debug('Applying config update (EVM)', { chainName, newConfig });
+          txs = await coreModule.update(newConfig);
+        } else {
+          // AltVM chain: use AltVMCoreModule
+          const chainLookup = createChainLookup(multiProvider);
+          const signer = await createAltVMSigner(chainMetadata, walletClient);
+
+          const coreModule = await AltVMCoreModule.create({
+            chain: chainName,
+            config: newConfig,
+            chainLookup,
+            signer,
+          });
+
+          logger.debug('Applying config update (AltVM)', { chainName, newConfig });
+          txs = await coreModule.update(newConfig);
+        }
 
         logger.debug('Config update successful', { chainName, txCount: txs.length });
 

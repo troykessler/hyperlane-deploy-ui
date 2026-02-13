@@ -1,11 +1,12 @@
 import { useState, useCallback } from 'react';
-import { ChainName } from '@hyperlane-xyz/sdk';
+import { ChainName, EvmWarpRouteReader } from '@hyperlane-xyz/sdk';
 import { DerivedWarpConfig } from '@hyperlane-xyz/provider-sdk/warp';
 import { getProtocolProvider } from '@hyperlane-xyz/provider-sdk';
 import { AltVMWarpRouteReader } from '@hyperlane-xyz/deploy-sdk';
 import { useMultiProvider } from '../chains/hooks';
 import { createChainLookup } from '../../utils/chainLookup';
 import { logger } from '../../utils/logger';
+import { isEvmChain } from '../../utils/protocolUtils';
 
 interface ReadProgress {
   status: 'idle' | 'reading' | 'success' | 'error';
@@ -39,19 +40,27 @@ export function useWarpRead() {
           throw new Error('Warp route address is required');
         }
 
-        const chainLookup = createChainLookup(multiProvider);
-        const protocolProvider = getProtocolProvider(chainMetadata.protocol);
-        const provider = await protocolProvider.createProvider(chainMetadata);
-
         logger.debug('Reading warp route config', {
           chainName,
           warpRouteAddress,
           protocol: chainMetadata.protocol,
         });
 
-        // Use AltVMWarpRouteReader for read-only operations
-        const reader = new AltVMWarpRouteReader(chainMetadata, chainLookup, provider);
-        const config = await reader.read(warpRouteAddress);
+        let config;
+
+        if (isEvmChain(chainMetadata)) {
+          // Use EVM reader for Ethereum chains
+          const evmMultiProvider = multiProvider.toMultiProvider();
+          const reader = new EvmWarpRouteReader(evmMultiProvider, chainName);
+          config = await reader.deriveWarpRouteConfig(warpRouteAddress);
+        } else {
+          // Use AltVM reader for non-EVM chains
+          const chainLookup = createChainLookup(multiProvider);
+          const protocolProvider = getProtocolProvider(chainMetadata.protocol);
+          const provider = await protocolProvider.createProvider(chainMetadata);
+          const reader = new AltVMWarpRouteReader(chainMetadata, chainLookup, provider);
+          config = await reader.read(warpRouteAddress);
+        }
 
         logger.debug('Warp route config read successfully', { chainName, config });
 

@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ChainName } from '@hyperlane-xyz/sdk';
+import { ChainName, EvmCoreReader } from '@hyperlane-xyz/sdk';
 import { chainAddresses } from '@hyperlane-xyz/registry';
 import { CoreConfig } from '@hyperlane-xyz/provider-sdk/core';
 import { AltVMCoreReader } from '@hyperlane-xyz/deploy-sdk';
@@ -7,6 +7,7 @@ import { getProtocolProvider } from '@hyperlane-xyz/provider-sdk';
 import { useMultiProvider } from '../chains/hooks';
 import { createChainLookup } from '../../utils/chainLookup';
 import { logger } from '../../utils/logger';
+import { isEvmChain } from '../../utils/protocolUtils';
 
 interface ReadProgress {
   status: 'idle' | 'reading' | 'success' | 'error';
@@ -58,16 +59,21 @@ export function useReadCoreConfig() {
           addressLength: mailboxAddress.length
         });
 
-        // Create read-only provider (no wallet needed!)
-        const protocolProvider = getProtocolProvider(chainMetadata.protocol);
-        const provider = await protocolProvider.createProvider(chainMetadata);
-
-        // Use AltVMCoreReader for read-only operations
-        const reader = new AltVMCoreReader(chainMetadata, chainLookup, provider);
-
+        // Use appropriate reader based on chain protocol type
         let config;
         try {
-          config = await reader.read(mailboxAddress);
+          if (isEvmChain(chainMetadata)) {
+            // Use EVM reader for Ethereum chains
+            const evmMultiProvider = multiProvider.toMultiProvider();
+            const reader = new EvmCoreReader(evmMultiProvider, chainName);
+            config = await reader.deriveCoreConfig({ mailbox: mailboxAddress });
+          } else {
+            // Use AltVM reader for non-EVM chains (Cosmos, Radix, Aleo, etc.)
+            const protocolProvider = getProtocolProvider(chainMetadata.protocol);
+            const provider = await protocolProvider.createProvider(chainMetadata);
+            const reader = new AltVMCoreReader(chainMetadata, chainLookup, provider);
+            config = await reader.read(mailboxAddress);
+          }
         } catch (readError) {
           const errorMsg = readError instanceof Error ? readError.message : String(readError);
           logger.error('Failed to read core config', {

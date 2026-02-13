@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { ChainName } from '@hyperlane-xyz/sdk';
+import { ChainName, EvmCoreModule } from '@hyperlane-xyz/sdk';
 import { CoreConfig } from '@hyperlane-xyz/provider-sdk/core';
 import { AltVMCoreModule } from '@hyperlane-xyz/deploy-sdk';
 import { useMultiProvider } from '../chains/hooks';
@@ -7,6 +7,8 @@ import { createChainLookup } from '../../utils/chainLookup';
 import { createAltVMSigner } from '../../utils/signerAdapters';
 import { logger } from '../../utils/logger';
 import { DeploymentStatus, DeployResult } from './types';
+import { isEvmChain } from '../../utils/protocolUtils';
+import { providers } from 'ethers';
 
 interface DeployProgress {
   status: DeploymentStatus;
@@ -39,19 +41,11 @@ export function useCoreDeploy() {
           throw new Error(`Chain metadata not found for ${chainName}`);
         }
 
-        // Create chain lookup adapter
-        const chainLookup = createChainLookup(multiProvider);
-
         // Get protocol-specific signer
         setProgress({
           status: DeploymentStatus.Validating,
           message: 'Connecting to wallet...',
         });
-
-        const signer = await createAltVMSigner(
-          chainMetadata,
-          walletClient
-        );
 
         // Deploy core contracts
         setProgress({
@@ -61,14 +55,42 @@ export function useCoreDeploy() {
 
         logger.debug('Starting core deployment', { chainName, config });
 
-        const addresses = await AltVMCoreModule.deploy({
-          chain: chainName,
-          config,
-          chainLookup,
-          signer,
-        });
+        let addresses: any;
 
-        logger.debug('Core deployment successful', { chainName, addresses });
+        if (isEvmChain(chainMetadata)) {
+          // EVM chain: use EvmCoreModule
+          const evmMultiProvider = multiProvider.toMultiProvider();
+
+          // Set signer from wallet client
+          if (walletClient && typeof walletClient.getSigner === 'function') {
+            const signer = await walletClient.getSigner();
+            evmMultiProvider.setSharedSigner(signer);
+          } else if (walletClient instanceof providers.Signer) {
+            evmMultiProvider.setSharedSigner(walletClient);
+          }
+
+          const coreModule = await EvmCoreModule.create({
+            chain: chainName,
+            config,
+            multiProvider: evmMultiProvider,
+          });
+
+          addresses = coreModule.serialize();
+          logger.debug('Core deployment successful (EVM)', { chainName, addresses });
+        } else {
+          // AltVM chain: use AltVMCoreModule
+          const chainLookup = createChainLookup(multiProvider);
+          const signer = await createAltVMSigner(chainMetadata, walletClient);
+
+          addresses = await AltVMCoreModule.deploy({
+            chain: chainName,
+            config,
+            chainLookup,
+            signer,
+          });
+
+          logger.debug('Core deployment successful (AltVM)', { chainName, addresses });
+        }
 
         setProgress({
           status: DeploymentStatus.Deployed,

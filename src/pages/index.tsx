@@ -21,6 +21,7 @@ import { WalletStatusBar } from '../features/wallet/WalletStatusBar';
 import { useCosmosWallet } from '../features/wallet/hooks/useCosmosWallet';
 import { useRadixWallet } from '../features/wallet/hooks/useRadixWallet';
 import { useAleoWallet } from '../features/wallet/hooks/useAleoWallet';
+import { useWalletClient } from 'wagmi';
 import { CustomChainsList } from '../features/chains/CustomChainsList';
 import { WarpConfigUpload } from '../features/warp/WarpConfigUpload';
 import { WarpFormBuilder } from '../features/warp/WarpFormBuilder';
@@ -71,17 +72,18 @@ const Home: NextPage = () => {
   const [warpRouteAddress, setWarpRouteAddress] = useState<string>('');
   const [editedWarpConfig, setEditedWarpConfig] = useState<WarpConfig | null>(null);
 
-  // Wallet hooks
-  const cosmosWallet = useCosmosWallet(selectedChain);
-  const radixWallet = useRadixWallet();
-  const aleoWallet = useAleoWallet();
-
   // Get protocol for selected chain
   const selectedProtocol = useMemo(() => {
     if (!selectedChain) return null;
     const metadata = multiProvider.tryGetChainMetadata(selectedChain);
     return metadata?.protocol || null;
   }, [selectedChain, multiProvider]);
+
+  // Wallet hooks - only pass chain if protocol matches
+  const cosmosWallet = useCosmosWallet(selectedProtocol === ProtocolType.CosmosNative ? selectedChain : undefined);
+  const radixWallet = useRadixWallet();
+  const aleoWallet = useAleoWallet();
+  const { data: evmWalletClient } = useWalletClient();
 
   // Check if selected chain is a custom chain
   const isCustomChain = useMemo(() => {
@@ -103,7 +105,9 @@ const Home: NextPage = () => {
   }, [selectedChain, activeTab, isCustomChain]);
 
   const getWalletClient = async () => {
-    if (selectedProtocol === ProtocolType.CosmosNative) {
+    if (selectedProtocol === ProtocolType.Ethereum) {
+      return evmWalletClient;
+    } else if (selectedProtocol === ProtocolType.CosmosNative) {
       return await cosmosWallet.getOfflineSigner();
     } else if (selectedProtocol === ProtocolType.Radix) {
       return radixWallet.rdt;
