@@ -8,6 +8,7 @@ import { createAltVMSigner, createEvmSigner } from '../../utils/signerAdapters';
 import { logger } from '../../utils/logger';
 import { DeploymentStatus, DeployResult } from './types';
 import { isEvmChain } from '../../utils/protocolUtils';
+import { checksumAddresses } from '../../utils/addressUtils';
 
 interface DeployProgress {
   status: DeploymentStatus;
@@ -54,6 +55,9 @@ export function useCoreDeploy() {
 
         logger.debug('Starting core deployment', { chainName, config });
 
+        // Checksum all addresses in config to ensure proper EIP-55 format
+        const checksummedConfig = checksumAddresses(config);
+
         let addresses: any;
 
         if (isEvmChain(chainMetadata)) {
@@ -68,7 +72,7 @@ export function useCoreDeploy() {
 
           const coreModule = await EvmCoreModule.create({
             chain: chainName,
-            config,
+            config: checksummedConfig,
             multiProvider: evmMultiProvider,
           });
 
@@ -81,7 +85,7 @@ export function useCoreDeploy() {
 
           addresses = await AltVMCoreModule.deploy({
             chain: chainName,
-            config,
+            config: checksummedConfig,
             chainLookup,
             signer,
           });
@@ -94,9 +98,12 @@ export function useCoreDeploy() {
           message: 'Deployment successful!',
         });
 
+        // Checksum all addresses to ensure proper EIP-55 format
+        const checksummedAddresses = checksumAddresses(addresses);
+
         return {
           chainName,
-          addresses,
+          addresses: checksummedAddresses,
           txHashes: [], // TODO: Extract tx hashes from deployment
           timestamp: Date.now(),
         };
