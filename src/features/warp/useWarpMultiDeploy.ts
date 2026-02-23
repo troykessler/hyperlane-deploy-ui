@@ -3,12 +3,11 @@ import { ChainName, EvmWarpModule } from '@hyperlane-xyz/sdk';
 import { AltVMWarpModule, AltVMDeployer } from '@hyperlane-xyz/deploy-sdk';
 import { useMultiProvider } from '../chains/hooks';
 import { createChainLookup } from '../../utils/chainLookup';
-import { createAltVMSigner } from '../../utils/signerAdapters';
+import { createAltVMSigner, createEvmSigner } from '../../utils/signerAdapters';
 import { logger } from '../../utils/logger';
 import type { WarpConfig, MultiChainDeployStatuses, RemoteRouters } from './types';
 import { validateWarpConfig } from './validation';
 import { isEvmChain } from '../../utils/protocolUtils';
-import { providers } from 'ethers';
 
 /**
  * Hook for deploying warp routes across multiple chains
@@ -79,11 +78,12 @@ export function useWarpMultiDeploy() {
             try {
               // Set signer for this chain
               const walletClient = walletsMap[chain];
-              if (walletClient && typeof walletClient.getSigner === 'function') {
-                const signer = await walletClient.getSigner();
-                evmMultiProvider.setSigner(chain, signer);
-              } else if (walletClient instanceof providers.Signer) {
-                evmMultiProvider.setSigner(chain, walletClient);
+              if (walletClient) {
+                const chainMetadata = multiProvider.tryGetChainMetadata(chain);
+                if (chainMetadata) {
+                  const signer = await createEvmSigner(walletClient, chainMetadata);
+                  evmMultiProvider.setSigner(chain, signer);
+                }
               }
 
               const module = await EvmWarpModule.create({
@@ -166,11 +166,9 @@ export function useWarpMultiDeploy() {
 
               // Set signer
               const walletClient = walletsMap[chain];
-              if (walletClient && typeof walletClient.getSigner === 'function') {
-                const signer = await walletClient.getSigner();
+              if (walletClient) {
+                const signer = await createEvmSigner(walletClient, chainMetadata);
                 evmMultiProvider.setSigner(chain, signer);
-              } else if (walletClient instanceof providers.Signer) {
-                evmMultiProvider.setSigner(chain, walletClient);
               }
 
               const module = await EvmWarpModule.create({

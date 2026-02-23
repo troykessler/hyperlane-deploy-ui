@@ -1,10 +1,8 @@
 import { useEffect } from 'react';
 import { ChainName } from '@hyperlane-xyz/sdk';
-import { ProtocolType } from '@hyperlane-xyz/utils';
 import { useAccountForChain } from '@hyperlane-xyz/widgets';
 import { useMultiProvider } from '../chains/hooks';
-import { useCosmosWallet } from '../wallet/hooks/useCosmosWallet';
-import { useAleoWallet } from '../wallet/hooks/useAleoWallet';
+import { useWallet } from '../wallet/hooks/useWallet';
 import { useStore } from '../store';
 
 interface WarpBaseFieldsProps {
@@ -23,9 +21,8 @@ export function WarpBaseFields({ owner, mailbox, onChange, chainName }: WarpBase
   const chainMetadata = chainName ? multiProvider.tryGetChainMetadata(chainName) : null;
   const protocol = chainMetadata?.protocol;
 
-  // Get protocol-specific wallets
-  const cosmosWallet = useCosmosWallet(chainName);
-  const aleoWallet = useAleoWallet();
+  // Get unified wallet
+  const wallet = useWallet(chainName, protocol);
 
   // Auto-populate mailbox address from previous deployments or registry
   useEffect(() => {
@@ -52,16 +49,8 @@ export function WarpBaseFields({ owner, mailbox, onChange, chainName }: WarpBase
   }, [chainName, mailbox, deployments, multiProvider, onChange]);
 
   const handleUseWalletAddress = () => {
-    let address: string | undefined;
-
-    // Get address based on protocol
-    if (protocol === ProtocolType.CosmosNative) {
-      address = cosmosWallet.address;
-    } else if (protocol === ProtocolType.Aleo) {
-      address = aleoWallet.address;
-    } else {
-      address = account?.addresses?.[0]?.address;
-    }
+    // Prefer unified wallet address, fallback to account for EVM
+    const address = wallet.address || account?.addresses?.[0]?.address;
 
     if (address) {
       onChange('owner', address);
@@ -70,12 +59,7 @@ export function WarpBaseFields({ owner, mailbox, onChange, chainName }: WarpBase
 
   // Determine if we have a wallet connected
   const hasWalletAddress = () => {
-    if (protocol === ProtocolType.CosmosNative) {
-      return !!cosmosWallet.address;
-    } else if (protocol === ProtocolType.Aleo) {
-      return !!aleoWallet.address;
-    }
-    return !!account?.addresses?.[0]?.address;
+    return wallet.isConnected || !!account?.addresses?.[0]?.address;
   };
 
   return (

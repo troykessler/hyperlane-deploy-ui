@@ -4,11 +4,10 @@ import { CoreConfig } from '@hyperlane-xyz/provider-sdk/core';
 import { AltVMCoreModule } from '@hyperlane-xyz/deploy-sdk';
 import { useMultiProvider } from '../chains/hooks';
 import { createChainLookup } from '../../utils/chainLookup';
-import { createAltVMSigner } from '../../utils/signerAdapters';
+import { createAltVMSigner, createEvmSigner } from '../../utils/signerAdapters';
 import { logger } from '../../utils/logger';
 import { DeploymentStatus, DeployResult } from './types';
 import { isEvmChain } from '../../utils/protocolUtils';
-import { providers } from 'ethers';
 
 interface DeployProgress {
   status: DeploymentStatus;
@@ -61,12 +60,10 @@ export function useCoreDeploy() {
           // EVM chain: use EvmCoreModule
           const evmMultiProvider = multiProvider.toMultiProvider();
 
-          // Set signer from wallet client
-          if (walletClient && typeof walletClient.getSigner === 'function') {
-            const signer = await walletClient.getSigner();
+          // Convert wallet client (viem) to ethers signer
+          if (walletClient) {
+            const signer = await createEvmSigner(walletClient, chainMetadata);
             evmMultiProvider.setSharedSigner(signer);
-          } else if (walletClient instanceof providers.Signer) {
-            evmMultiProvider.setSharedSigner(walletClient);
           }
 
           const coreModule = await EvmCoreModule.create({

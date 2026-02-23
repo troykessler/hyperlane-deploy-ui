@@ -3,12 +3,11 @@ import { ChainName, EvmWarpModule } from '@hyperlane-xyz/sdk';
 import { AltVMWarpModule } from '@hyperlane-xyz/deploy-sdk';
 import { useMultiProvider } from '../chains/hooks';
 import { createChainLookup } from '../../utils/chainLookup';
-import { createAltVMSigner } from '../../utils/signerAdapters';
+import { createAltVMSigner, createEvmSigner } from '../../utils/signerAdapters';
 import { logger } from '../../utils/logger';
 import type { WarpConfig } from './types';
 import { validateWarpConfig } from './validation';
 import { isEvmChain } from '../../utils/protocolUtils';
-import { providers } from 'ethers';
 
 interface UpdateProgress {
   status: 'idle' | 'validating' | 'applying' | 'success' | 'error';
@@ -55,12 +54,10 @@ export function useWarpUpdate() {
           // EVM chain: use EvmWarpModule
           const evmMultiProvider = multiProvider.toMultiProvider();
 
-          // Set signer from wallet client
-          if (walletClient && typeof walletClient.getSigner === 'function') {
-            const signer = await walletClient.getSigner();
+          // Convert wallet client (viem) to ethers signer
+          if (walletClient) {
+            const signer = await createEvmSigner(walletClient, chainMetadata);
             evmMultiProvider.setSharedSigner(signer);
-          } else if (walletClient instanceof providers.Signer) {
-            evmMultiProvider.setSharedSigner(walletClient);
           }
 
           const module = await EvmWarpModule.create({
@@ -72,7 +69,7 @@ export function useWarpUpdate() {
 
           logger.debug('Applying warp config update (EVM)', { chainName, config });
           await module.update(config as any);
-        } else {
+        } else{
           // AltVM chain: use AltVMWarpModule
           const chainLookup = createChainLookup(multiProvider);
           const signer = await createAltVMSigner(chainMetadata, walletClient);

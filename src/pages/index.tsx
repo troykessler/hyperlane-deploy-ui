@@ -2,7 +2,6 @@ import type { NextPage } from 'next';
 import { useState, useMemo, useEffect } from 'react';
 import { CoreConfig } from '@hyperlane-xyz/provider-sdk/core';
 import { ChainName } from '@hyperlane-xyz/sdk';
-import { ProtocolType } from '@hyperlane-xyz/utils';
 import { useStore } from '../features/store';
 import { useMultiProvider } from '../features/chains/hooks';
 import { ChainSelectField } from '../features/chains/ChainSelectField';
@@ -18,11 +17,9 @@ import { useWarpRead } from '../features/warp/useWarpRead';
 import { useWarpUpdate } from '../features/warp/useWarpUpdate';
 import { FloatingButtonStrip } from '../components/nav/FloatingButtonStrip';
 import { WalletStatusBar } from '../features/wallet/WalletStatusBar';
-import { useCosmosWallet } from '../features/wallet/hooks/useCosmosWallet';
-import { useRadixWallet } from '../features/wallet/hooks/useRadixWallet';
-import { useAleoWallet } from '../features/wallet/hooks/useAleoWallet';
-import { useWalletClient } from 'wagmi';
+import { useWallet } from '../features/wallet/hooks/useWallet';
 import { CustomChainsList } from '../features/chains/CustomChainsList';
+import { DeploymentAddresses } from '../components/deploy/DeploymentAddresses';
 import { WarpConfigUpload } from '../features/warp/WarpConfigUpload';
 import { WarpFormBuilder } from '../features/warp/WarpFormBuilder';
 import { WarpMultiChainWizard } from '../features/warp/WarpMultiChainWizard';
@@ -79,11 +76,8 @@ const Home: NextPage = () => {
     return metadata?.protocol || null;
   }, [selectedChain, multiProvider]);
 
-  // Wallet hooks - only pass chain if protocol matches
-  const cosmosWallet = useCosmosWallet(selectedProtocol === ProtocolType.CosmosNative ? selectedChain : undefined);
-  const radixWallet = useRadixWallet();
-  const aleoWallet = useAleoWallet();
-  const { data: evmWalletClient } = useWalletClient();
+  // Unified wallet hook - automatically routes to correct wallet based on protocol
+  const wallet = useWallet(selectedChain, selectedProtocol);
 
   // Check if selected chain is a custom chain
   const isCustomChain = useMemo(() => {
@@ -105,16 +99,14 @@ const Home: NextPage = () => {
   }, [selectedChain, activeTab, isCustomChain]);
 
   const getWalletClient = async () => {
-    if (selectedProtocol === ProtocolType.Ethereum) {
-      return evmWalletClient;
-    } else if (selectedProtocol === ProtocolType.CosmosNative) {
-      return await cosmosWallet.getOfflineSigner();
-    } else if (selectedProtocol === ProtocolType.Radix) {
-      return radixWallet.rdt;
-    } else if (selectedProtocol === ProtocolType.Aleo) {
-      return aleoWallet.wallet;
+    if (!wallet.walletClient) {
+      return null;
     }
-    return null;
+    // For Cosmos, walletClient is a function that returns the offline signer
+    if (typeof wallet.walletClient === 'function') {
+      return await wallet.walletClient();
+    }
+    return wallet.walletClient;
   };
 
   const handleReadConfig = async () => {
@@ -657,36 +649,11 @@ const Home: NextPage = () => {
                               <p className="text-sm text-gray-500 mt-1">
                                 {new Date(deployment.timestamp).toLocaleString()}
                               </p>
-                              <div className="mt-3 space-y-1">
-                                <div className="flex items-center justify-between text-xs text-gray-600">
-                                  <div>
-                                    <strong>Mailbox:</strong>{' '}
-                                    <code className="bg-gray-100 px-1 rounded">
-                                      {deployment.addresses.mailbox.slice(0, 10)}...{deployment.addresses.mailbox.slice(-8)}
-                                    </code>
-                                  </div>
-                                  <button
-                                    onClick={() => copyToClipboard(deployment.addresses.mailbox)}
-                                    className="ml-2 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded"
-                                  >
-                                    Copy
-                                  </button>
-                                </div>
-                                <div className="flex items-center justify-between text-xs text-gray-600">
-                                  <div>
-                                    <strong>Validator Announce:</strong>{' '}
-                                    <code className="bg-gray-100 px-1 rounded">
-                                      {deployment.addresses.validatorAnnounce.slice(0, 10)}...{deployment.addresses.validatorAnnounce.slice(-8)}
-                                    </code>
-                                  </div>
-                                  <button
-                                    onClick={() => copyToClipboard(deployment.addresses.validatorAnnounce)}
-                                    className="ml-2 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50 rounded"
-                                  >
-                                    Copy
-                                  </button>
-                                </div>
-                              </div>
+
+                              <DeploymentAddresses
+                                addresses={deployment.addresses}
+                                chainName={deployment.chainName}
+                              />
                             </div>
                           </div>
                         </div>

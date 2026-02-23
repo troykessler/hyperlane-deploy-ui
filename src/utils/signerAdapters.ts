@@ -6,6 +6,26 @@ import { CosmosNativeSigner } from '@hyperlane-xyz/cosmos-sdk';
 import { RadixSigner } from '@hyperlane-xyz/radix-sdk';
 import { AleoSigner } from '@hyperlane-xyz/aleo-sdk';
 import type { OfflineSigner } from '@cosmjs/proto-signing';
+import type { Signer } from 'ethers';
+import type { WalletClient } from 'viem';
+import { walletClientToSigner } from './viemToEthers';
+
+/**
+ * Create EVM signer from wagmi wallet client (viem)
+ * Converts viem WalletClient to ethers v5 Signer
+ */
+export async function createEvmSigner(
+  walletClient: WalletClient | any,
+  chainMetadata: ChainMetadata
+): Promise<Signer> {
+  if (!walletClient) {
+    throw new Error('Wallet not connected');
+  }
+
+  // Convert viem WalletClient to ethers Signer
+  const signer = walletClientToSigner(walletClient);
+  return signer;
+}
 
 /**
  * Get the appropriate AltVM signer for a given chain
