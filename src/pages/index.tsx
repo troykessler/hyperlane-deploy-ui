@@ -21,6 +21,7 @@ import { DeployerInfo } from '../features/wallet/DeployerInfo';
 import { CustomChainsList } from '../features/chains/CustomChainsList';
 import { DeploymentAddresses } from '../components/deploy/DeploymentAddresses';
 import { CoreConfigSelector } from '../components/deploy/CoreConfigSelector';
+import { WarpConfigSelector } from '../components/deploy/WarpConfigSelector';
 import { WarpConfigUpload } from '../features/warp/WarpConfigUpload';
 import { WarpFormBuilder } from '../features/warp/WarpFormBuilder';
 import { WarpMultiChainWizard } from '../features/warp/WarpMultiChainWizard';
@@ -97,25 +98,9 @@ const Home: NextPage = () => {
     return wallet.walletClient;
   };
 
-  const handleCoreConfigSelect = async (mailbox: string) => {
+  const handleCoreConfigSelect = (mailbox: string) => {
     setMailboxAddress(mailbox);
     setApplyError('');
-
-    // Auto-trigger config read (non-blocking - user can still proceed manually if this fails)
-    if (selectedChain) {
-      try {
-        await readConfig(selectedChain, mailbox);
-      } catch (error) {
-        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
-        setApplyError(
-          `Auto-read failed: ${errorMsg}\n\n` +
-          `The mailbox address (${mailbox}) has been saved. You can:\n` +
-          `• Try a different deployment from the list above\n` +
-          `• Use the form builder in the "Deploy Core" tab to create a new config\n` +
-          `• Manually configure and deploy new contracts to this chain`
-        );
-      }
-    }
   };
 
   const handleReadConfig = async () => {
@@ -811,27 +796,44 @@ const Home: NextPage = () => {
               />
             </div>
 
-            {/* Warp Route Address */}
+            {/* Warp Config Selector */}
             {selectedChain && (
               <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">2. Warp Route Address</h3>
-                <WarpRouteSelect
+                <h3 className="text-sm font-medium text-gray-700 mb-3">2. Select Warp Route</h3>
+                <WarpConfigSelector
                   chainName={selectedChain}
-                  value={warpRouteAddress}
-                  onChange={setWarpRouteAddress}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                  onSelect={setWarpRouteAddress}
+                  selectedAddress={warpRouteAddress}
                 />
-                <button
-                  onClick={handleReadWarpConfig}
-                  disabled={!selectedChain || !warpRouteAddress || isReadingWarp}
-                  className={`mt-3 px-6 py-2 rounded-lg font-medium transition-colors ${
-                    selectedChain && warpRouteAddress && !isReadingWarp
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
-                      : 'bg-gray-400 text-white cursor-not-allowed'
-                  }`}
-                >
-                  {isReadingWarp ? 'Reading...' : 'Read Config'}
-                </button>
+              </div>
+            )}
+
+            {/* Manual Warp Route Address Input */}
+            {selectedChain && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">
+                  3. Or Enter Warp Route Address Manually
+                </h3>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={warpRouteAddress}
+                    onChange={(e) => setWarpRouteAddress(e.target.value)}
+                    placeholder="Enter deployed warp route contract address"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                  />
+                  <button
+                    onClick={handleReadWarpConfig}
+                    disabled={!warpRouteAddress || isReadingWarp}
+                    className={`px-6 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                      warpRouteAddress && !isReadingWarp
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-gray-400 text-white cursor-not-allowed'
+                    }`}
+                  >
+                    {isReadingWarp ? 'Reading...' : 'Read Config'}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -919,7 +921,7 @@ const Home: NextPage = () => {
                     onClick={handleReadConfig}
                     disabled={!mailboxAddress || isReading}
                     className={`px-6 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
-                      mailboxAddress && !isReading ? 'bg-gray-600 text-white hover:bg-gray-700' : 'bg-gray-400 text-white cursor-not-allowed'
+                      mailboxAddress && !isReading ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-400 text-white cursor-not-allowed'
                     }`}
                   >
                     {isReading ? 'Reading...' : 'Read Config'}
@@ -1024,11 +1026,23 @@ const Home: NextPage = () => {
 
             {selectedChain && (
               <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">2. Warp Route Address</h3>
-                <WarpRouteSelect
+                <h3 className="text-sm font-medium text-gray-700 mb-3">2. Select Warp Route</h3>
+                <WarpConfigSelector
                   chainName={selectedChain}
+                  onSelect={setWarpRouteAddress}
+                  selectedAddress={warpRouteAddress}
+                />
+              </div>
+            )}
+
+            {selectedChain && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">3. Or Enter Warp Route Address Manually</h3>
+                <input
+                  type="text"
                   value={warpRouteAddress}
-                  onChange={setWarpRouteAddress}
+                  onChange={(e) => setWarpRouteAddress(e.target.value)}
+                  placeholder="Enter deployed warp route contract address (optional)"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
                 />
               </div>
