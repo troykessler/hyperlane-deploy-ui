@@ -74,9 +74,11 @@ export function WarpHookConfigForm({
   };
 
   const handleAddressChange = (value: string) => {
-    setHookAddress(value);
+    // Normalize address to lowercase to avoid checksum validation errors
+    const normalized = value.trim().toLowerCase();
+    setHookAddress(normalized);
     if (useAddress) {
-      onChange(value || undefined);
+      onChange(normalized || undefined);
     }
   };
 
@@ -89,12 +91,15 @@ export function WarpHookConfigForm({
     if (type === 'merkleTreeHook') {
       onChange({ type: 'merkleTreeHook' });
     } else if (type === 'interchainGasPaymaster') {
-      const config: any = { type: 'interchainGasPaymaster' };
+      const config: any = {
+        type: 'interchainGasPaymaster',
+        // Always include overhead and oracleConfig, even if empty
+        overhead: igpOverhead,
+        oracleConfig: igpOracleConfig,
+      };
       if (igpOwner) config.owner = igpOwner;
       if (igpBeneficiary) config.beneficiary = igpBeneficiary;
       if (igpOracleKey) config.oracleKey = igpOracleKey;
-      if (Object.keys(igpOverhead).length > 0) config.overhead = igpOverhead;
-      if (Object.keys(igpOracleConfig).length > 0) config.oracleConfig = igpOracleConfig;
       onChange(config);
     } else if (type === 'protocolFee') {
       const config: any = { type: 'protocolFee' };
@@ -118,24 +123,30 @@ export function WarpHookConfigForm({
     setIgpOverhead(igpConfig.overhead);
     setIgpOracleConfig(igpConfig.oracleConfig);
 
-    const config: any = { type: 'interchainGasPaymaster' };
+    const config: any = {
+      type: 'interchainGasPaymaster',
+      // Always include overhead and oracleConfig, even if empty
+      overhead: igpConfig.overhead,
+      oracleConfig: igpConfig.oracleConfig,
+    };
     if (igpConfig.owner) config.owner = igpConfig.owner;
     if (igpConfig.beneficiary) config.beneficiary = igpConfig.beneficiary;
     if (igpConfig.oracleKey) config.oracleKey = igpConfig.oracleKey;
-    if (Object.keys(igpConfig.overhead).length > 0) config.overhead = igpConfig.overhead;
-    if (Object.keys(igpConfig.oracleConfig).length > 0) config.oracleConfig = igpConfig.oracleConfig;
     onChange(config);
   };
 
   const handleProtocolFeeFieldChange = (field: 'maxProtocolFee' | 'protocolFee' | 'beneficiary', value: string) => {
-    if (field === 'maxProtocolFee') setMaxProtocolFee(value);
-    else if (field === 'protocolFee') setProtocolFeeValue(value);
-    else setFeeRecipient(value);
+    // Normalize address fields to lowercase
+    const normalized = field === 'beneficiary' ? value.trim().toLowerCase() : value;
+
+    if (field === 'maxProtocolFee') setMaxProtocolFee(normalized);
+    else if (field === 'protocolFee') setProtocolFeeValue(normalized);
+    else setFeeRecipient(normalized);
 
     const config: any = { type: 'protocolFee' };
-    if (field === 'maxProtocolFee' ? value : maxProtocolFee) config.maxProtocolFee = field === 'maxProtocolFee' ? value : maxProtocolFee;
-    if (field === 'protocolFee' ? value : protocolFeeValue) config.protocolFee = field === 'protocolFee' ? value : protocolFeeValue;
-    if (field === 'beneficiary' ? value : feeRecipient) config.beneficiary = field === 'beneficiary' ? value : feeRecipient;
+    if (field === 'maxProtocolFee' ? normalized : maxProtocolFee) config.maxProtocolFee = field === 'maxProtocolFee' ? normalized : maxProtocolFee;
+    if (field === 'protocolFee' ? normalized : protocolFeeValue) config.protocolFee = field === 'protocolFee' ? normalized : protocolFeeValue;
+    if (field === 'beneficiary' ? normalized : feeRecipient) config.beneficiary = field === 'beneficiary' ? normalized : feeRecipient;
     onChange(config);
   };
 

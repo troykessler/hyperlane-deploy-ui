@@ -95,7 +95,7 @@ export function useCoreDeploy() {
 
         setProgress({
           status: DeploymentStatus.Deployed,
-          message: 'Deployment successful!',
+          message: 'Deployment successful! View your deployment results in the View Deployments page.',
         });
 
         // Checksum all addresses to ensure proper EIP-55 format

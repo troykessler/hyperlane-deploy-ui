@@ -16,8 +16,8 @@ import { CoreConfigEditor } from '../features/coreConfig/CoreConfigEditor';
 import { useWarpRead } from '../features/warp/useWarpRead';
 import { useWarpUpdate } from '../features/warp/useWarpUpdate';
 import { FloatingButtonStrip } from '../components/nav/FloatingButtonStrip';
-import { WalletStatusBar } from '../features/wallet/WalletStatusBar';
 import { useWallet } from '../features/wallet/hooks/useWallet';
+import { DeployerInfo } from '../features/wallet/DeployerInfo';
 import { CustomChainsList } from '../features/chains/CustomChainsList';
 import { DeploymentAddresses } from '../components/deploy/DeploymentAddresses';
 import { CoreConfigSelector } from '../components/deploy/CoreConfigSelector';
@@ -287,8 +287,8 @@ const Home: NextPage = () => {
           <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
             <h2 className="text-2xl font-bold text-gray-900">Deploy Core Contracts</h2>
 
-            {/* Wallet Status */}
-            <WalletStatusBar selectedChain={selectedChain} selectedProtocol={selectedProtocol} />
+            {/* Deployer Info */}
+            <DeployerInfo selectedChain={selectedChain} selectedProtocol={selectedProtocol} />
 
             {/* Input Method Selector */}
             <div>
@@ -419,8 +419,8 @@ const Home: NextPage = () => {
           <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
             <h2 className="text-2xl font-bold text-gray-900">Deploy Warp Route</h2>
 
-            {/* Wallet Status */}
-            <WalletStatusBar selectedChain={selectedChain} selectedProtocol={selectedProtocol} />
+            {/* Deployer Info */}
+            <DeployerInfo selectedChain={selectedChain} selectedProtocol={selectedProtocol} />
 
             {/* Input Method Selector */}
             <div>
@@ -580,7 +580,10 @@ const Home: NextPage = () => {
                       Core Deployments ({deployments.length})
                     </h3>
                     <div className="space-y-3">
-                      {deployments.map((deployment) => (
+                      {deployments
+                        .slice()
+                        .sort((a, b) => b.timestamp - a.timestamp)
+                        .map((deployment) => (
                         <div
                           key={deployment.id}
                           className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
@@ -618,7 +621,10 @@ const Home: NextPage = () => {
                       Warp Route Deployments ({warpDeployments.length})
                     </h3>
                     <div className="space-y-3">
-                      {warpDeployments.map((deployment) => (
+                      {warpDeployments
+                        .slice()
+                        .sort((a, b) => b.timestamp - a.timestamp)
+                        .map((deployment) => (
                         <div
                           key={deployment.id}
                           className="border border-gray-200 rounded-lg p-4 hover:border-blue-300 transition-colors"
@@ -879,7 +885,8 @@ const Home: NextPage = () => {
               Read, edit, and apply configuration updates to existing core deployments.
             </p>
 
-            <WalletStatusBar selectedChain={selectedChain} selectedProtocol={selectedProtocol} />
+            {/* Deployer Info */}
+            <DeployerInfo selectedChain={selectedChain} selectedProtocol={selectedProtocol} />
 
             <div>
               <h3 className="text-sm font-medium text-gray-700 mb-3">1. Select Chain</h3>
@@ -1007,7 +1014,8 @@ const Home: NextPage = () => {
               Read, edit, and apply configuration updates to existing warp route deployments.
             </p>
 
-            <WalletStatusBar selectedChain={selectedChain} selectedProtocol={selectedProtocol} />
+            {/* Deployer Info */}
+            <DeployerInfo selectedChain={selectedChain} selectedProtocol={selectedProtocol} />
 
             <div>
               <h3 className="text-sm font-medium text-gray-700 mb-3">1. Select Chain</h3>

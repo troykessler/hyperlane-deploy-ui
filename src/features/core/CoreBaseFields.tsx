@@ -45,7 +45,7 @@ export function CoreBaseFields({ owner, onChange, chainName }: CoreBaseFieldsPro
             type="text"
             id="owner"
             value={owner}
-            onChange={(e) => onChange(e.target.value)}
+            onChange={(e) => onChange(e.target.value.trim().toLowerCase())}
             placeholder="0x..."
             className="w-full px-3 py-2 pr-32 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           />

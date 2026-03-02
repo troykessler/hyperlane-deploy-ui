@@ -53,8 +53,10 @@ export function CoreConfigSelector({
     getAddresses();
   }, [chainName, registry]);
 
-  // Get local deployments for this chain
-  const localDeployments = deployments.filter((d) => d.chainName === chainName);
+  // Get local deployments for this chain, sorted by newest first
+  const localDeployments = deployments
+    .filter((d) => d.chainName === chainName)
+    .sort((a, b) => b.timestamp - a.timestamp);
 
   if (loading) {
     return (

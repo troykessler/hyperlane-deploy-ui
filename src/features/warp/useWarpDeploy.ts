@@ -80,7 +80,7 @@ export function useWarpDeploy() {
 
         setProgress({
           status: 'deployed',
-          message: 'Warp route deployed successfully!',
+          message: 'Warp route deployed successfully! View your deployment results in the View Deployments page.',
         });
 
         return {

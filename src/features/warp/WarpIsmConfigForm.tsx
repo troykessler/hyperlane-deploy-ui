@@ -65,7 +65,8 @@ export function WarpIsmConfigForm({ value, onChange }: WarpIsmConfigFormProps) {
 
   const handleValidatorChange = (index: number, value: string) => {
     const newValidators = [...validators];
-    newValidators[index] = value;
+    // Normalize address to lowercase to avoid checksum validation errors
+    newValidators[index] = value.trim().toLowerCase();
     setValidators(newValidators);
   };
 
