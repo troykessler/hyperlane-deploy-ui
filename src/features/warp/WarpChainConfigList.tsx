@@ -1,17 +1,23 @@
+import { useCallback } from 'react';
 import { ChainName } from '@hyperlane-xyz/sdk';
 import { WarpFormBuilder } from './WarpFormBuilder';
+import { CoreConfigSelector } from '../../components/deploy/CoreConfigSelector';
 import type { WarpConfig } from './types';
 
 interface WarpChainConfigListProps {
   selectedChains: ChainName[];
   configs: Record<ChainName, WarpConfig | null>;
   onConfigChange: (chain: ChainName, config: WarpConfig | null) => void;
+  mailboxAddresses: Record<ChainName, string>;
+  onMailboxSelect: (chain: ChainName, mailbox: string) => void;
 }
 
 export function WarpChainConfigList({
   selectedChains,
   configs,
   onConfigChange,
+  mailboxAddresses,
+  onMailboxSelect,
 }: WarpChainConfigListProps) {
   if (selectedChains.length === 0) {
     return (
@@ -28,7 +34,9 @@ export function WarpChainConfigList({
     <div className="space-y-6">
       {selectedChains.map((chain, index) => {
         const config = configs[chain];
-        const isConfigured = config !== null && config !== undefined;
+        const mailboxAddress = mailboxAddresses[chain];
+        const hasMailbox = !!mailboxAddress;
+        const isConfigured = hasMailbox && config !== null && config !== undefined;
 
         return (
           <div
@@ -65,12 +73,41 @@ export function WarpChainConfigList({
             </div>
 
             {/* Chain Config Form */}
-            <div className="p-6 bg-white">
-              <WarpFormBuilder
-                chainName={chain}
-                initialConfig={config}
-                onChange={(newConfig) => onConfigChange(chain, newConfig)}
-              />
+            <div className="p-6 bg-white space-y-6">
+              {/* Core Deployment Selection */}
+              <div>
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                  Select Core Deployment
+                </h4>
+                <CoreConfigSelector
+                  chainName={chain}
+                  onSelect={(mailbox) => onMailboxSelect(chain, mailbox)}
+                  selectedMailbox={mailboxAddress}
+                />
+              </div>
+
+              {/* Warp Route Configuration */}
+              {hasMailbox && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-3">
+                    Configure Warp Route
+                  </h4>
+                  <WarpFormBuilder
+                    chainName={chain}
+                    initialConfig={config}
+                    onChange={(newConfig) => onConfigChange(chain, newConfig)}
+                    mailboxAddress={mailboxAddress}
+                  />
+                </div>
+              )}
+
+              {!hasMailbox && (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm text-amber-800">
+                    Select a core deployment above to continue with warp route configuration.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         );

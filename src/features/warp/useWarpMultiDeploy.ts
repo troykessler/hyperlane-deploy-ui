@@ -136,23 +136,59 @@ export function useWarpMultiDeploy() {
           setChainStatuses((prev) => ({ ...prev, [chain]: 'enrolling' }));
 
           try {
-            // Build remote routers map (all other chains)
-            const remoteRouters: RemoteRouters = {};
-            chains.forEach((otherChain) => {
-              if (otherChain !== chain) {
-                remoteRouters[otherChain] = { address: addresses[otherChain] };
-              }
+            logger.debug('Processing chain for enrollment', {
+              chain,
+              config: configsMap[chain],
             });
 
-            // Update config with remote routers
-            const updatedConfig: WarpConfig = {
-              ...configsMap[chain],
+            // Build remote routers map (all other chains)
+            // Use domain IDs as keys for SDK compatibility
+            const remoteRouters: Record<number, { address: string }> = {};
+            const destinationGas: Record<number, string> = {};
+
+            for (const otherChain of chains) {
+              if (otherChain !== chain) {
+                const otherChainMetadata = multiProvider.tryGetChainMetadata(otherChain);
+                if (!otherChainMetadata?.domainId) {
+                  logger.error(`No domain ID for ${otherChain}`, new Error('Missing domain ID'));
+                  continue;
+                }
+
+                const domainId = Number(otherChainMetadata.domainId);
+                remoteRouters[domainId] = { address: addresses[otherChain] };
+
+                // Use existing destinationGas if available and valid, otherwise default to 200000
+                const existingGas = configsMap[chain].destinationGas?.[otherChain];
+                if (existingGas && !isNaN(Number(existingGas)) && Number(existingGas) > 0) {
+                  destinationGas[domainId] = existingGas;
+                } else {
+                  destinationGas[domainId] = '200000';
+                }
+              }
+            }
+
+            // Clean the base config to remove any invalid numeric values
+            const baseConfig = { ...configsMap[chain] };
+
+            // For synthetic tokens, ensure decimals is valid
+            if (baseConfig.type === 'synthetic' && baseConfig.decimals !== undefined) {
+              const decimals = Number(baseConfig.decimals);
+              if (isNaN(decimals) || decimals < 0) {
+                baseConfig.decimals = 18; // Default to 18 if invalid
+              }
+            }
+
+            // Create enrollment config with domain IDs as keys (for SDK compatibility)
+            const enrollmentConfig: any = {
+              ...baseConfig,
               remoteRouters,
+              destinationGas,
             };
 
             logger.debug('Enrolling remote routers', {
               chain,
-              remoteRouters: Object.keys(remoteRouters),
+              remoteRouterDomains: Object.keys(remoteRouters),
+              destinationGasDomains: Object.keys(destinationGas),
             });
 
             const chainMetadata = multiProvider.tryGetChainMetadata(chain);
@@ -173,12 +209,12 @@ export function useWarpMultiDeploy() {
 
               const module = await EvmWarpModule.create({
                 chain,
-                config: updatedConfig as any,
+                config: enrollmentConfig,
                 multiProvider: evmMultiProvider,
                 addresses: { deployedTokenRoute: addresses[chain] },
               });
 
-              await module.update(updatedConfig as any);
+              await module.update(enrollmentConfig);
             } else {
               // AltVM chain: use AltVMWarpModule
               const chainLookup = createChainLookup(multiProvider);
@@ -187,10 +223,10 @@ export function useWarpMultiDeploy() {
               const module = new AltVMWarpModule(chainLookup, signer, {
                 chain,
                 addresses: { deployedTokenRoute: addresses[chain] },
-                config: updatedConfig,
+                config: enrollmentConfig,
               });
 
-              await module.update(updatedConfig);
+              await module.update(enrollmentConfig);
             }
 
             logger.debug('Remote routers enrolled successfully', { chain });

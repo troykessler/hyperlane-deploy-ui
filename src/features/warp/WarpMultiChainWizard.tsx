@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { ChainName } from '@hyperlane-xyz/sdk';
+import { useWalletClient } from 'wagmi';
 import { useMultiProvider } from '../chains/hooks';
 import { getDeployableChains } from '../chains/utils';
 import { WarpChainConfigList } from './WarpChainConfigList';
@@ -8,13 +9,16 @@ import { useWarpMultiDeploy } from './useWarpMultiDeploy';
 import { useCosmosWallet } from '../wallet/hooks/useCosmosWallet';
 import { useRadixWallet } from '../wallet/hooks/useRadixWallet';
 import { useAleoWallet } from '../wallet/hooks/useAleoWallet';
+import { ChainSelectField } from '../chains/ChainSelectField';
 import { useStore } from '../store';
 import { logger } from '../../utils/logger';
-import type { WarpConfig } from './types';
+import { isEvmChain } from '../../utils/protocolUtils';
+import type { WarpConfig, RemoteRouters, DestinationGas } from './types';
 
 export function WarpMultiChainWizard() {
   const [step, setStep] = useState<'select' | 'configure' | 'deploy'>('select');
   const [selectedChains, setSelectedChains] = useState<ChainName[]>([]);
+  const [mailboxAddresses, setMailboxAddresses] = useState<Record<ChainName, string>>({});
   const multiProvider = useMultiProvider();
 
   const { warpMultiChainConfigs, setWarpChainConfig, addWarpDeployment } = useStore();
@@ -26,26 +30,40 @@ export function WarpMultiChainWizard() {
   }, [multiProvider]);
 
   // Wallet hooks (we'll need to get the appropriate wallet for each chain)
-  const cosmosWallet = useCosmosWallet(selectedChains[0] || ''); // Simplified for now
+  const { data: evmWalletClient } = useWalletClient();
+
+  // Find first Cosmos chain or use default
+  const cosmosChain = useMemo(() => {
+    return selectedChains.find((chain) => {
+      const metadata = multiProvider.tryGetChainMetadata(chain);
+      return metadata?.protocol === 'cosmosnative';
+    }) || 'cosmoshub'; // Default to cosmoshub if no Cosmos chain selected
+  }, [selectedChains, multiProvider]);
+
+  const cosmosWallet = useCosmosWallet(cosmosChain);
   const radixWallet = useRadixWallet();
   const aleoWallet = useAleoWallet();
 
-  const handleChainToggle = (chain: ChainName) => {
-    setSelectedChains((prev) =>
-      prev.includes(chain) ? prev.filter((c) => c !== chain) : [...prev, chain]
-    );
+  const handleChainChange = (index: number, chain: ChainName) => {
+    setSelectedChains((prev) => {
+      const newChains = [...prev];
+      newChains[index] = chain;
+      return newChains;
+    });
   };
 
-  const handleSelectAll = () => {
-    setSelectedChains(deployableChains);
+  const handleAddChain = () => {
+    setSelectedChains((prev) => [...prev, '' as ChainName]);
   };
 
-  const handleClearAll = () => {
-    setSelectedChains([]);
+  const handleRemoveChain = (index: number) => {
+    setSelectedChains((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleNextStep = () => {
     if (step === 'select') {
+      // Filter out empty chains before moving to configure
+      setSelectedChains((prev) => prev.filter((c) => c));
       setStep('configure');
     } else if (step === 'configure') {
       setStep('deploy');
@@ -64,6 +82,10 @@ export function WarpMultiChainWizard() {
     if (config) {
       setWarpChainConfig(chain, config);
     }
+  };
+
+  const handleMailboxSelect = (chain: ChainName, mailbox: string) => {
+    setMailboxAddresses((prev) => ({ ...prev, [chain]: mailbox }));
   };
 
   const handleDeploy = async () => {
@@ -87,20 +109,30 @@ export function WarpMultiChainWizard() {
           return;
         }
 
-        // Simplified wallet selection - in production, need proper per-chain wallet handling
-        switch (chainMetadata.protocol) {
-          case 'cosmosnative':
-            walletsMap[chain] = await cosmosWallet.getOfflineSigner();
-            break;
-          case 'radix':
-            walletsMap[chain] = radixWallet.rdt;
-            break;
-          case 'aleo':
-            walletsMap[chain] = aleoWallet.wallet;
-            break;
-          default:
-            logger.error(`Unsupported protocol for chain ${chain}: ${chainMetadata.protocol}`, new Error('Unsupported protocol'));
+        // Get wallet for chain based on protocol
+        if (isEvmChain(chainMetadata)) {
+          // EVM chains (ethereum, arbitrum, optimism, etc.)
+          if (!evmWalletClient) {
+            logger.error(`No EVM wallet connected for chain ${chain}`, new Error('Wallet not connected'));
             return;
+          }
+          walletsMap[chain] = evmWalletClient;
+        } else {
+          // AltVM chains
+          switch (chainMetadata.protocol) {
+            case 'cosmosnative':
+              walletsMap[chain] = await cosmosWallet.getOfflineSigner();
+              break;
+            case 'radix':
+              walletsMap[chain] = radixWallet.rdt;
+              break;
+            case 'aleo':
+              walletsMap[chain] = aleoWallet.wallet;
+              break;
+            default:
+              logger.error(`Unsupported protocol for chain ${chain}: ${chainMetadata.protocol}`, new Error('Unsupported protocol'));
+              return;
+          }
         }
       }
 
@@ -109,14 +141,35 @@ export function WarpMultiChainWizard() {
       const addresses = await deploy(configsMap, walletsMap);
 
       if (addresses) {
-        // Save deployments to store
+        // Save deployments to store with enrolled remote routers
         Object.entries(addresses).forEach(([chain, address]) => {
+          // Build remoteRouters for this chain
+          const remoteRouters: RemoteRouters = {};
+          Object.entries(addresses).forEach(([otherChain, otherAddress]) => {
+            if (otherChain !== chain) {
+              remoteRouters[otherChain] = { address: otherAddress };
+            }
+          });
+
+          // Build destinationGas with default values
+          const destinationGas: DestinationGas = {};
+          Object.keys(addresses).forEach((otherChain) => {
+            if (otherChain !== chain) {
+              const existingGas = configsMap[chain].destinationGas?.[otherChain];
+              destinationGas[otherChain] = existingGas || '200000';
+            }
+          });
+
           addWarpDeployment({
             id: `${chain}-${Date.now()}`,
             chainName: chain as ChainName,
             timestamp: Date.now(),
             address,
-            config: configsMap[chain],
+            config: {
+              ...configsMap[chain],
+              remoteRouters,
+              destinationGas,
+            },
             type: configsMap[chain].type,
             txHashes: [],
           });
@@ -129,8 +182,10 @@ export function WarpMultiChainWizard() {
     }
   };
 
-  // Check if all selected chains have configs
-  const allConfigured = selectedChains.every((chain) => warpMultiChainConfigs[chain]);
+  // Check if all selected chains have mailbox addresses and configs
+  const allConfigured = selectedChains.every(
+    (chain) => mailboxAddresses[chain] && warpMultiChainConfigs[chain]
+  );
 
   return (
     <div className="space-y-6">
@@ -167,50 +222,57 @@ export function WarpMultiChainWizard() {
       {/* Step 1: Select Chains */}
       {step === 'select' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-gray-900">Select Chains</h3>
-            <div className="flex gap-2">
-              <button
-                onClick={handleSelectAll}
-                className="text-xs px-3 py-1 text-blue-600 hover:bg-blue-50 rounded"
-              >
-                Select All
-              </button>
-              <button
-                onClick={handleClearAll}
-                className="text-xs px-3 py-1 text-gray-600 hover:bg-gray-50 rounded"
-              >
-                Clear All
-              </button>
+          <h3 className="text-lg font-semibold text-gray-900">Select Chains</h3>
+
+          <div className="space-y-3">
+            {selectedChains.length === 0 ? (
+              <div className="p-6 border-2 border-dashed border-gray-300 rounded-lg text-center">
+                <p className="text-sm text-gray-600 mb-3">No chains selected</p>
+                <button
+                  onClick={handleAddChain}
+                  className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700"
+                >
+                  + Add Chain
+                </button>
+              </div>
+            ) : (
+              <>
+                {selectedChains.map((chain, index) => (
+                  <div key={index} className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <ChainSelectField
+                        value={chain}
+                        onChange={(newChain) => handleChainChange(index, newChain)}
+                        label=""
+                      />
+                    </div>
+                    <button
+                      onClick={() => handleRemoveChain(index)}
+                      className="px-3 py-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                      title="Remove chain"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+
+                <button
+                  onClick={handleAddChain}
+                  className="w-full px-4 py-2 border-2 border-dashed border-gray-300 text-gray-700 text-sm font-medium rounded-lg hover:border-blue-500 hover:text-blue-600 transition-colors"
+                >
+                  + Add Another Chain
+                </button>
+              </>
+            )}
+          </div>
+
+          {selectedChains.length > 0 && (
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Selected:</strong> {selectedChains.filter(c => c).length} chain(s)
+              </p>
             </div>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {deployableChains.map((chain) => (
-              <label
-                key={chain}
-                className={`flex items-center p-3 border-2 rounded-lg cursor-pointer transition-all ${
-                  selectedChains.includes(chain)
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedChains.includes(chain)}
-                  onChange={() => handleChainToggle(chain)}
-                  className="w-4 h-4 text-blue-600"
-                />
-                <span className="ml-2 text-sm font-medium text-gray-900">{chain}</span>
-              </label>
-            ))}
-          </div>
-
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-800">
-              <strong>Selected:</strong> {selectedChains.length} chain(s)
-            </p>
-          </div>
+          )}
         </div>
       )}
 
@@ -222,6 +284,8 @@ export function WarpMultiChainWizard() {
             selectedChains={selectedChains}
             configs={warpMultiChainConfigs}
             onConfigChange={handleConfigChange}
+            mailboxAddresses={mailboxAddresses}
+            onMailboxSelect={handleMailboxSelect}
           />
         </div>
       )}
@@ -287,7 +351,7 @@ export function WarpMultiChainWizard() {
           <button
             onClick={handleNextStep}
             disabled={
-              (step === 'select' && selectedChains.length === 0) ||
+              (step === 'select' && selectedChains.filter(c => c).length === 0) ||
               (step === 'configure' && !allConfigured)
             }
             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"

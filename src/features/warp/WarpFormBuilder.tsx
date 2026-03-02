@@ -16,14 +16,15 @@ interface WarpFormBuilderProps {
   chainName: ChainName;
   initialConfig?: WarpConfig | null;
   onChange: (config: WarpConfig | null) => void;
+  mailboxAddress?: string;
 }
 
-export function WarpFormBuilder({ chainName, initialConfig, onChange }: WarpFormBuilderProps) {
+export function WarpFormBuilder({ chainName, initialConfig, onChange, mailboxAddress }: WarpFormBuilderProps) {
   const [tokenType, setTokenType] = useState<WarpTokenType>(
     initialConfig?.type || 'collateral'
   );
   const [owner, setOwner] = useState(initialConfig?.owner || '');
-  const [mailbox, setMailbox] = useState(initialConfig?.mailbox || '');
+  const [mailbox, setMailbox] = useState(mailboxAddress || initialConfig?.mailbox || '');
 
   // Collateral fields
   const [token, setToken] = useState(
@@ -55,6 +56,13 @@ export function WarpFormBuilder({ chainName, initialConfig, onChange }: WarpForm
   );
 
   const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Update mailbox when mailboxAddress prop changes
+  useEffect(() => {
+    if (mailboxAddress) {
+      setMailbox(mailboxAddress);
+    }
+  }, [mailboxAddress]);
 
   // Build config whenever fields change
   useEffect(() => {
@@ -104,6 +112,7 @@ export function WarpFormBuilder({ chainName, initialConfig, onChange }: WarpForm
     }
 
     onChange(config);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     tokenType,
     owner,
@@ -116,7 +125,6 @@ export function WarpFormBuilder({ chainName, initialConfig, onChange }: WarpForm
     hook,
     remoteRouters,
     destinationGas,
-    onChange,
   ]);
 
   const handleBaseFieldChange = (field: 'owner' | 'mailbox', value: string) => {
