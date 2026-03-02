@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { ChainName, WarpCoreConfig } from '@hyperlane-xyz/sdk';
 import { useStore } from '../store';
+import { links } from '../../consts/links';
 
 export interface WarpRouteOption {
   routeId: string;
@@ -8,6 +9,7 @@ export interface WarpRouteOption {
   address: string;
   symbol: string;
   standard: string;
+  logoURI?: string;
 }
 
 type WarpRouteConfigMap = Record<string, WarpCoreConfig>;
@@ -48,12 +50,16 @@ export function useAvailableWarpRoutes(chainName?: ChainName) {
 
           if (!address) return;
 
+          // Construct logo URI if not provided
+          const logoURI = (token as any).logoURI || `${links.imgPath}/tokens/${token.chainName}/${address}/logo.svg`;
+
           options.push({
             routeId,
             chainName: token.chainName,
             address,
             symbol: token.symbol || 'Unknown',
             standard: token.standard || 'Unknown',
+            logoURI,
           });
         });
       }

@@ -765,7 +765,15 @@ const Home: NextPage = () => {
             {/* Config Display (Read-only) */}
             {readCoreConfig && (
               <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">Configuration</h3>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-medium text-gray-700">Configuration</h3>
+                  <button
+                    onClick={() => copyToClipboard(JSON.stringify(readCoreConfig, null, 2))}
+                    className="text-xs px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition-colors"
+                  >
+                    Copy JSON
+                  </button>
+                </div>
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <pre className="text-xs whitespace-pre-wrap break-words">{JSON.stringify(readCoreConfig, null, 2)}</pre>
                 </div>
@@ -844,7 +852,15 @@ const Home: NextPage = () => {
             {/* Config Display (Read-only) */}
             {readWarpConfigData && (
               <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">Configuration</h3>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-medium text-gray-700">Configuration</h3>
+                  <button
+                    onClick={() => copyToClipboard(JSON.stringify(readWarpConfigData, null, 2))}
+                    className="text-xs px-3 py-1.5 text-blue-600 hover:bg-blue-50 rounded-lg font-medium transition-colors"
+                  >
+                    Copy JSON
+                  </button>
+                </div>
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                   <pre className="text-xs whitespace-pre-wrap break-words">{JSON.stringify(readWarpConfigData, null, 2)}</pre>
                 </div>
