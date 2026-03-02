@@ -29,7 +29,7 @@ export function WarpConfigPreview({ config }: WarpConfigPreviewProps) {
       </div>
 
       <div className="border border-gray-200 rounded-lg overflow-hidden">
-        <pre className="p-4 bg-gray-50 text-xs font-mono overflow-x-auto max-h-96">
+        <pre className="p-4 bg-gray-50 text-xs font-mono overflow-x-auto">
           {yamlText}
         </pre>
       </div>

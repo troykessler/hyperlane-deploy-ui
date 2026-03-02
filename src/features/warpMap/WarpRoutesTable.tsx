@@ -143,7 +143,7 @@ export function WarpRoutesTable({ onChainClick, onWarpRouteClick }: WarpRoutesTa
           Warp Route Connections ({filteredData?.links.length || 0})
           {search && data && ` of ${data.links.length}`}
         </h3>
-        <div className="space-y-2 max-h-96 overflow-y-auto">
+        <div className="space-y-2">
           {filteredData?.links.map((link, idx) => {
             const sourceChain = typeof link.source === 'string' ? link.source : link.source;
             const targetChain = typeof link.target === 'string' ? link.target : link.target;

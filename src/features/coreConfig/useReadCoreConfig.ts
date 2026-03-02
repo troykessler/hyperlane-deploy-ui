@@ -83,11 +83,31 @@ export function useReadCoreConfig() {
             protocol: chainMetadata.protocol
           });
 
-          // Provide more helpful error message
+          // Provide more helpful error messages
           if (errorMsg.includes('not a Cosmos')) {
             throw new Error(
               `Invalid address format for Cosmos chain. The mailbox address "${mailboxAddress}" does not appear to be a valid Cosmos address. ` +
               `Cosmos addresses should start with a prefix like "cosmos1" or "${chainMetadata.bech32Prefix || 'chain-prefix'}1" followed by the address.`
+            );
+          }
+
+          if (errorMsg.includes('missing revert data') || errorMsg.includes('Transaction reverted')) {
+            throw new Error(
+              `Failed to read configuration from mailbox at ${mailboxAddress}. This could mean:\n` +
+              `• The deployment is incomplete or corrupted\n` +
+              `• Some core contracts (hooks, ISM) are not properly configured\n` +
+              `• The RPC endpoint is having issues\n` +
+              `• The deployment was done with an incompatible SDK version\n\n` +
+              `Try using a different deployment or manually enter the configuration.`
+            );
+          }
+
+          if (errorMsg.includes('could not detect network') || errorMsg.includes('network does not support')) {
+            throw new Error(
+              `Network error: Could not connect to ${chainName}. Please check:\n` +
+              `• Your internet connection\n` +
+              `• The RPC endpoint is working\n` +
+              `• The chain configuration is correct`
             );
           }
 

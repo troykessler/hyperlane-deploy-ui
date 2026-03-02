@@ -20,6 +20,7 @@ import { WalletStatusBar } from '../features/wallet/WalletStatusBar';
 import { useWallet } from '../features/wallet/hooks/useWallet';
 import { CustomChainsList } from '../features/chains/CustomChainsList';
 import { DeploymentAddresses } from '../components/deploy/DeploymentAddresses';
+import { CoreConfigSelector } from '../components/deploy/CoreConfigSelector';
 import { WarpConfigUpload } from '../features/warp/WarpConfigUpload';
 import { WarpFormBuilder } from '../features/warp/WarpFormBuilder';
 import { WarpMultiChainWizard } from '../features/warp/WarpMultiChainWizard';
@@ -29,9 +30,10 @@ import type { WarpConfig } from '../features/warp/types';
 import { WarpRouteSelect } from '../features/warpRoutes/WarpRouteSelect';
 import { CoreFormBuilder } from '../features/core/CoreFormBuilder';
 import { WarpRoutesGraph } from '../features/warpMap';
+import { Sidebar, NavigationPage } from '../components/nav/Sidebar';
 
 const Home: NextPage = () => {
-  const [activeTab, setActiveTab] = useState<'deploy' | 'warp' | 'view' | 'apply' | 'chains' | 'map'>('deploy');
+  const [activePage, setActivePage] = useState<NavigationPage>('read-core');
   const [selectedChain, setSelectedChain] = useState<ChainName>('');
   const [currentConfig, setCurrentConfig] = useState<CoreConfig | null>(null);
   const [uploadError, setUploadError] = useState<string>('');
@@ -43,14 +45,14 @@ const Home: NextPage = () => {
   const [warpInputMethod, setWarpInputMethod] = useState<'upload' | 'builder' | 'multichain'>('builder');
   const [warpError, setWarpError] = useState<string>('');
 
-  const { deployments, addDeployment, customChains, warpDeployments, addWarpDeployment, currentWarpConfig, setCurrentWarpConfig } = useStore((s) => ({
+  const { deployments, addDeployment, warpDeployments, addWarpDeployment, currentWarpConfig, setCurrentWarpConfig, customChains } = useStore((s) => ({
     deployments: s.deployments,
     addDeployment: s.addDeployment,
-    customChains: s.customChains,
     warpDeployments: s.warpDeployments,
     addWarpDeployment: s.addWarpDeployment,
     currentWarpConfig: s.currentWarpConfig,
     setCurrentWarpConfig: s.setCurrentWarpConfig,
+    customChains: s.customChains,
   }));
 
   const multiProvider = useMultiProvider();
@@ -79,24 +81,10 @@ const Home: NextPage = () => {
   // Unified wallet hook - automatically routes to correct wallet based on protocol
   const wallet = useWallet(selectedChain, selectedProtocol);
 
-  // Check if selected chain is a custom chain
-  const isCustomChain = useMemo(() => {
-    return selectedChain ? !!customChains[selectedChain] : false;
-  }, [selectedChain, customChains]);
-
   // Clear mailbox address when chain changes
   useEffect(() => {
     setMailboxAddress('');
   }, [selectedChain]);
-
-  // Auto-read config when chain is selected (for Apply Updates tab)
-  // Skip auto-read for custom chains - they need manual mailbox address
-  useEffect(() => {
-    if (selectedChain && activeTab === 'apply' && !isCustomChain) {
-      handleReadConfig();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedChain, activeTab, isCustomChain]);
 
   const getWalletClient = async () => {
     if (!wallet.walletClient) {
@@ -109,19 +97,35 @@ const Home: NextPage = () => {
     return wallet.walletClient;
   };
 
+  const handleCoreConfigSelect = async (mailbox: string) => {
+    setMailboxAddress(mailbox);
+    setApplyError('');
+
+    // Auto-trigger config read (non-blocking - user can still proceed manually if this fails)
+    if (selectedChain) {
+      try {
+        await readConfig(selectedChain, mailbox);
+      } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        setApplyError(
+          `Auto-read failed: ${errorMsg}\n\n` +
+          `The mailbox address (${mailbox}) has been saved. You can:\n` +
+          `• Try a different deployment from the list above\n` +
+          `• Use the form builder in the "Deploy Core" tab to create a new config\n` +
+          `• Manually configure and deploy new contracts to this chain`
+        );
+      }
+    }
+  };
+
   const handleReadConfig = async () => {
     if (!selectedChain) return;
 
-    // For custom chains, require mailbox address
-    if (isCustomChain && !mailboxAddress) {
-      setApplyError('Please provide the mailbox address for this custom chain');
-      return;
-    }
-
     try {
       // Read config - no wallet needed!
-      // Only pass mailbox address for custom chains
-      await readConfig(selectedChain, isCustomChain ? mailboxAddress : undefined);
+      // Pass mailbox address if available (from selector or manual input)
+      // Otherwise, readConfig will try to get it from registry
+      await readConfig(selectedChain, mailboxAddress || undefined);
       setApplyError('');
     } catch (error) {
       setApplyError(`Failed to read config: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -265,77 +269,22 @@ const Home: NextPage = () => {
   };
 
   return (
-    <div className="space-y-4 pt-4 max-w-4xl mx-auto px-4">
-      {/* Tabs */}
-      <div className="flex border-b border-gray-200">
-        <button
-          onClick={() => setActiveTab('deploy')}
-          className={`px-6 py-3 font-semibold transition-colors ${
-            activeTab === 'deploy'
-              ? 'border-b-2 border-blue-500 text-blue-600 bg-white'
-              : 'text-gray-900 hover:text-gray-900 hover:bg-gray-100 font-semibold'
-          }`}
-        >
-          Deploy Core
-        </button>
-        <button
-          onClick={() => setActiveTab('warp')}
-          className={`px-6 py-3 font-semibold transition-colors ${
-            activeTab === 'warp'
-              ? 'border-b-2 border-blue-500 text-blue-600 bg-white'
-              : 'text-gray-900 hover:text-gray-900 hover:bg-gray-100 font-semibold'
-          }`}
-        >
-          Deploy Warp
-        </button>
-        <button
-          onClick={() => setActiveTab('view')}
-          className={`px-6 py-3 font-semibold transition-colors ${
-            activeTab === 'view'
-              ? 'border-b-2 border-blue-500 text-blue-600 bg-white'
-              : 'text-gray-900 hover:text-gray-900 hover:bg-gray-100 font-semibold'
-          }`}
-        >
-          View Deployments ({deployments.length + warpDeployments.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('apply')}
-          className={`px-6 py-3 font-semibold transition-colors ${
-            activeTab === 'apply'
-              ? 'border-b-2 border-blue-500 text-blue-600 bg-white'
-              : 'text-gray-900 hover:text-gray-900 hover:bg-gray-100 font-semibold'
-          }`}
-        >
-          Apply Updates
-        </button>
-        <button
-          onClick={() => setActiveTab('chains')}
-          className={`px-6 py-3 font-semibold transition-colors ${
-            activeTab === 'chains'
-              ? 'border-b-2 border-blue-500 text-blue-600 bg-white'
-              : 'text-gray-900 hover:text-gray-900 hover:bg-gray-100 font-semibold'
-          }`}
-        >
-          Manage Chains
-        </button>
-        <button
-          onClick={() => setActiveTab('map')}
-          className={`px-6 py-3 font-semibold transition-colors ${
-            activeTab === 'map'
-              ? 'border-b-2 border-blue-500 text-blue-600 bg-white'
-              : 'text-gray-900 hover:text-gray-900 hover:bg-gray-100 font-semibold'
-          }`}
-        >
-          Explorer Map
-        </button>
-      </div>
+    <div className="flex h-screen overflow-hidden">
+      {/* Sidebar */}
+      <Sidebar
+        activePage={activePage}
+        onNavigate={setActivePage}
+        deploymentCount={deployments.length + warpDeployments.length}
+        customChainCount={Object.keys(customChains).length}
+      />
 
-      {/* Content */}
-      <div className="relative bg-white rounded-lg shadow-md p-6">
-        <FloatingButtonStrip />
+      {/* Main Content */}
+      <div className="flex-1 overflow-y-scroll bg-gray-100" style={{ scrollbarGutter: 'stable' }}>
+        <div className="max-w-6xl mx-auto p-6">
+          <FloatingButtonStrip />
 
-        {activeTab === 'deploy' && (
-          <div className="space-y-6">
+          {activePage === 'deploy-core' && (
+          <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
             <h2 className="text-2xl font-bold text-gray-900">Deploy Core Contracts</h2>
 
             {/* Wallet Status */}
@@ -466,8 +415,8 @@ const Home: NextPage = () => {
           </div>
         )}
 
-        {activeTab === 'warp' && (
-          <div className="space-y-6">
+        {activePage === 'deploy-warp' && (
+          <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
             <h2 className="text-2xl font-bold text-gray-900">Deploy Warp Route</h2>
 
             {/* Wallet Status */}
@@ -600,8 +549,8 @@ const Home: NextPage = () => {
           </div>
         )}
 
-        {activeTab === 'view' && (
-          <div className="space-y-6">
+        {activePage === 'view-deployments' && (
+          <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
             <h2 className="text-2xl font-bold text-gray-900">Your Deployments</h2>
 
             {deployments.length === 0 && warpDeployments.length === 0 ? (
@@ -609,13 +558,13 @@ const Home: NextPage = () => {
                 <p className="text-gray-500">No deployments yet</p>
                 <div className="mt-4 flex gap-3 justify-center">
                   <button
-                    onClick={() => setActiveTab('deploy')}
+                    onClick={() => setActivePage('deploy-core')}
                     className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                   >
                     Deploy Core
                   </button>
                   <button
-                    onClick={() => setActiveTab('warp')}
+                    onClick={() => setActivePage('deploy-warp')}
                     className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                   >
                     Deploy Warp
@@ -736,41 +685,15 @@ const Home: NextPage = () => {
           </div>
         )}
 
-        {activeTab === 'apply' && (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900">Apply Config Updates</h2>
+        {activePage === 'read-core' && (
+          <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
+            <h2 className="text-2xl font-bold text-gray-900">Read Core Config</h2>
+            <p className="text-gray-600">
+              Read the current core configuration from an existing deployment on any chain.
+            </p>
 
             {/* Wallet Status */}
             <WalletStatusBar selectedChain={selectedChain} selectedProtocol={selectedProtocol} />
-
-            {/* Deployment Type Selector */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Select Deployment Type
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  onClick={() => setUpdateType('core')}
-                  className={`px-4 py-3 rounded-lg border-2 font-medium transition-all ${
-                    updateType === 'core'
-                      ? 'border-purple-500 bg-purple-50 text-purple-700'
-                      : 'border-gray-200 hover:border-gray-300 text-gray-700'
-                  }`}
-                >
-                  Core Contracts
-                </button>
-                <button
-                  onClick={() => setUpdateType('warp')}
-                  className={`px-4 py-3 rounded-lg border-2 font-medium transition-all ${
-                    updateType === 'warp'
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-gray-200 hover:border-gray-300 text-gray-700'
-                  }`}
-                >
-                  Warp Routes
-                </button>
-              </div>
-            </div>
 
             {/* Chain Selection */}
             <div>
@@ -782,38 +705,49 @@ const Home: NextPage = () => {
               />
             </div>
 
-            {/* Core-specific: Mailbox Address (for custom chains) */}
-            {updateType === 'core' && isCustomChain && selectedChain && (
+            {/* Core Config Selector */}
+            {selectedChain && (
               <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">2. Mailbox Address</h3>
-                <input
-                  type="text"
-                  value={mailboxAddress}
-                  onChange={(e) => setMailboxAddress(e.target.value)}
-                  placeholder="Enter deployed mailbox contract address"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                />
-                <p className="mt-2 text-xs text-gray-500">
-                  Custom chains require the mailbox address to read existing configuration.
-                </p>
-              </div>
-            )}
-
-            {/* Warp-specific: Warp Route Address */}
-            {updateType === 'warp' && selectedChain && (
-              <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">2. Warp Route Address</h3>
-                <WarpRouteSelect
+                <h3 className="text-sm font-medium text-gray-700 mb-3">2. Select Core Deployment</h3>
+                <CoreConfigSelector
                   chainName={selectedChain}
-                  value={warpRouteAddress}
-                  onChange={setWarpRouteAddress}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                  onSelect={handleCoreConfigSelect}
+                  selectedMailbox={mailboxAddress}
                 />
               </div>
             )}
 
-            {/* Core: Read Progress */}
-            {updateType === 'core' && selectedChain && (
+            {/* Manual Mailbox Address Input */}
+            {selectedChain && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">
+                  3. Or Enter Mailbox Address Manually
+                </h3>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={mailboxAddress}
+                    onChange={(e) => setMailboxAddress(e.target.value)}
+                    placeholder="Enter deployed mailbox contract address"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                  />
+                  <button
+                    onClick={handleReadConfig}
+                    disabled={!mailboxAddress || isReading}
+                    className={`px-6 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                      mailboxAddress && !isReading
+                        ? 'bg-blue-600 text-white hover:bg-blue-700'
+                        : 'bg-gray-400 text-white cursor-not-allowed'
+                    }`}
+                  >
+                    {isReading ? 'Reading...' : 'Read Config'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Read Progress */}
+            {selectedChain && (
               <div>
                 <DeployProgress
                   status={
@@ -828,8 +762,71 @@ const Home: NextPage = () => {
               </div>
             )}
 
-            {/* Warp: Read Progress */}
-            {updateType === 'warp' && selectedChain && warpRouteAddress && (
+            {/* Config Display (Read-only) */}
+            {readCoreConfig && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">Configuration</h3>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <pre className="text-xs whitespace-pre-wrap break-words">{JSON.stringify(readCoreConfig, null, 2)}</pre>
+                </div>
+              </div>
+            )}
+
+            {/* Error Display */}
+            {applyError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+                <pre className="whitespace-pre-wrap font-sans">{applyError}</pre>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activePage === 'read-warp' && (
+          <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
+            <h2 className="text-2xl font-bold text-gray-900">Read Warp Config</h2>
+            <p className="text-gray-600">
+              Read the current warp route configuration from an existing deployment.
+            </p>
+
+            {/* Wallet Status */}
+            <WalletStatusBar selectedChain={selectedChain} selectedProtocol={selectedProtocol} />
+
+            {/* Chain Selection */}
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 mb-3">1. Select Chain</h3>
+              <ChainSelectField
+                value={selectedChain}
+                onChange={setSelectedChain}
+                label=""
+              />
+            </div>
+
+            {/* Warp Route Address */}
+            {selectedChain && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">2. Warp Route Address</h3>
+                <WarpRouteSelect
+                  chainName={selectedChain}
+                  value={warpRouteAddress}
+                  onChange={setWarpRouteAddress}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                />
+                <button
+                  onClick={handleReadWarpConfig}
+                  disabled={!selectedChain || !warpRouteAddress || isReadingWarp}
+                  className={`mt-3 px-6 py-2 rounded-lg font-medium transition-colors ${
+                    selectedChain && warpRouteAddress && !isReadingWarp
+                      ? 'bg-blue-600 text-white hover:bg-blue-700'
+                      : 'bg-gray-400 text-white cursor-not-allowed'
+                  }`}
+                >
+                  {isReadingWarp ? 'Reading...' : 'Read Config'}
+                </button>
+              </div>
+            )}
+
+            {/* Read Progress */}
+            {selectedChain && warpRouteAddress && (
               <div>
                 <DeployProgress
                   status={
@@ -844,12 +841,91 @@ const Home: NextPage = () => {
               </div>
             )}
 
-            {/* Core: Config Editor */}
-            {updateType === 'core' && readCoreConfig && (
+            {/* Config Display (Read-only) */}
+            {readWarpConfigData && (
               <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">
-                  {isCustomChain ? '3' : '2'}. Edit Configuration
-                </h3>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">Configuration</h3>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <pre className="text-xs whitespace-pre-wrap break-words">{JSON.stringify(readWarpConfigData, null, 2)}</pre>
+                </div>
+              </div>
+            )}
+
+            {/* Error Display */}
+            {applyError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+                <pre className="whitespace-pre-wrap font-sans">{applyError}</pre>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activePage === 'apply-core' && (
+          <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
+            <h2 className="text-2xl font-bold text-gray-900">Apply Core Config Updates</h2>
+            <p className="text-gray-600">
+              Read, edit, and apply configuration updates to existing core deployments.
+            </p>
+
+            <WalletStatusBar selectedChain={selectedChain} selectedProtocol={selectedProtocol} />
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 mb-3">1. Select Chain</h3>
+              <ChainSelectField value={selectedChain} onChange={setSelectedChain} label="" />
+            </div>
+
+            {selectedChain && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">2. Select Core Deployment</h3>
+                <CoreConfigSelector
+                  chainName={selectedChain}
+                  onSelect={handleCoreConfigSelect}
+                  selectedMailbox={mailboxAddress}
+                />
+              </div>
+            )}
+
+            {selectedChain && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">3. Or Enter Mailbox Address Manually</h3>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={mailboxAddress}
+                    onChange={(e) => setMailboxAddress(e.target.value)}
+                    placeholder="Enter deployed mailbox contract address (optional)"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                  />
+                  <button
+                    onClick={handleReadConfig}
+                    disabled={!mailboxAddress || isReading}
+                    className={`px-6 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                      mailboxAddress && !isReading ? 'bg-gray-600 text-white hover:bg-gray-700' : 'bg-gray-400 text-white cursor-not-allowed'
+                    }`}
+                  >
+                    {isReading ? 'Reading...' : 'Read Config'}
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-gray-500">Enter a different mailbox address if you want to read from a deployment not listed above.</p>
+              </div>
+            )}
+
+            {selectedChain && (
+              <DeployProgress
+                status={
+                  readProgress.status === 'idle' ? DeploymentStatus.Idle :
+                  readProgress.status === 'reading' ? DeploymentStatus.Validating :
+                  readProgress.status === 'success' ? DeploymentStatus.Deployed :
+                  DeploymentStatus.Failed
+                }
+                message={readProgress.message}
+                error={readProgress.error}
+              />
+            )}
+
+            {readCoreConfig && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">4. Edit Configuration</h3>
                 <CoreConfigEditor
                   chainName={selectedChain}
                   initialConfig={readCoreConfig}
@@ -859,20 +935,7 @@ const Home: NextPage = () => {
               </div>
             )}
 
-            {/* Warp: Config Editor */}
-            {updateType === 'warp' && readWarpConfigData && (
-              <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">3. Edit Configuration</h3>
-                <WarpFormBuilder
-                  chainName={selectedChain}
-                  initialConfig={readWarpConfigData as WarpConfig}
-                  onChange={setEditedWarpConfig}
-                />
-              </div>
-            )}
-
-            {/* Core: Apply Progress */}
-            {updateType === 'core' && applyProgress.status !== 'idle' && (
+            {applyProgress.status !== 'idle' && (
               <DeployProgress
                 status={
                   applyProgress.status === 'validating' ? DeploymentStatus.Validating :
@@ -885,8 +948,97 @@ const Home: NextPage = () => {
               />
             )}
 
-            {/* Warp: Apply Progress */}
-            {updateType === 'warp' && warpUpdateProgress.status !== 'idle' && (
+            {applyError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
+                <pre className="whitespace-pre-wrap font-sans">{applyError}</pre>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              {readCoreConfig && (
+                <button
+                  onClick={handleReadConfig}
+                  disabled={!selectedChain || isReading}
+                  className={`flex-1 px-6 py-3 rounded-lg font-medium transition-colors ${
+                    selectedChain && !isReading ? 'bg-gray-600 text-white hover:bg-gray-700' : 'bg-gray-400 text-white cursor-not-allowed'
+                  }`}
+                >
+                  {isReading ? 'Refreshing...' : 'Refresh Config'}
+                </button>
+              )}
+              <button
+                onClick={handleApplyUpdates}
+                disabled={!selectedChain || !editedConfig || isApplying}
+                className={`flex-1 px-6 py-3 rounded-lg font-medium transition-colors ${
+                  selectedChain && editedConfig && !isApplying ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-400 text-white cursor-not-allowed'
+                }`}
+              >
+                {isApplying ? 'Applying...' : 'Apply Updates'}
+              </button>
+            </div>
+
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Note:</strong> Read current core configuration, edit it, and apply changes. Wallet must be connected.
+              </p>
+              <p className="text-sm text-blue-800 mt-2">
+                <strong>Tip:</strong> If registry deployments fail, use local deployments or deploy new contracts.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {activePage === 'apply-warp' && (
+          <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
+            <h2 className="text-2xl font-bold text-gray-900">Apply Warp Config Updates</h2>
+            <p className="text-gray-600">
+              Read, edit, and apply configuration updates to existing warp route deployments.
+            </p>
+
+            <WalletStatusBar selectedChain={selectedChain} selectedProtocol={selectedProtocol} />
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-700 mb-3">1. Select Chain</h3>
+              <ChainSelectField value={selectedChain} onChange={setSelectedChain} label="" />
+            </div>
+
+            {selectedChain && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">2. Warp Route Address</h3>
+                <WarpRouteSelect
+                  chainName={selectedChain}
+                  value={warpRouteAddress}
+                  onChange={setWarpRouteAddress}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                />
+              </div>
+            )}
+
+            {selectedChain && warpRouteAddress && (
+              <DeployProgress
+                status={
+                  warpReadProgress.status === 'idle' ? DeploymentStatus.Idle :
+                  warpReadProgress.status === 'reading' ? DeploymentStatus.Validating :
+                  warpReadProgress.status === 'success' ? DeploymentStatus.Deployed :
+                  DeploymentStatus.Failed
+                }
+                message={warpReadProgress.message}
+                error={warpReadProgress.error}
+              />
+            )}
+
+            {readWarpConfigData && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">3. Edit Configuration</h3>
+                <WarpFormBuilder
+                  chainName={selectedChain}
+                  initialConfig={readWarpConfigData as WarpConfig}
+                  onChange={setEditedWarpConfig}
+                />
+              </div>
+            )}
+
+            {warpUpdateProgress.status !== 'idle' && (
               <DeployProgress
                 status={
                   warpUpdateProgress.status === 'validating' ? DeploymentStatus.Validating :
@@ -899,83 +1051,43 @@ const Home: NextPage = () => {
               />
             )}
 
-            {/* Error Display */}
             {applyError && (
               <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-800">
-                {applyError}
+                <pre className="whitespace-pre-wrap font-sans">{applyError}</pre>
               </div>
             )}
 
-            {/* Core: Action Buttons */}
-            {updateType === 'core' && (
-              <div className="flex gap-3">
-                <button
-                  onClick={handleReadConfig}
-                  disabled={!selectedChain || isReading}
-                  className={`flex-1 px-6 py-3 rounded-lg font-medium transition-colors ${
-                    selectedChain && !isReading
-                      ? 'bg-gray-600 text-white hover:bg-gray-700'
-                      : 'bg-gray-400 text-white cursor-not-allowed'
-                  }`}
-                >
-                  {isReading ? 'Reading...' : 'Read Current Config'}
-                </button>
+            <div className="flex gap-3">
+              <button
+                onClick={handleReadWarpConfig}
+                disabled={!selectedChain || !warpRouteAddress || isReadingWarp}
+                className={`flex-1 px-6 py-3 rounded-lg font-medium transition-colors ${
+                  selectedChain && warpRouteAddress && !isReadingWarp ? 'bg-gray-600 text-white hover:bg-gray-700' : 'bg-gray-400 text-white cursor-not-allowed'
+                }`}
+              >
+                {isReadingWarp ? 'Reading...' : 'Read Current Config'}
+              </button>
+              <button
+                onClick={handleApplyWarpUpdates}
+                disabled={!selectedChain || !warpRouteAddress || !editedWarpConfig || isApplyingWarp}
+                className={`flex-1 px-6 py-3 rounded-lg font-medium transition-colors ${
+                  selectedChain && warpRouteAddress && editedWarpConfig && !isApplyingWarp ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-400 text-white cursor-not-allowed'
+                }`}
+              >
+                {isApplyingWarp ? 'Applying...' : 'Apply Updates'}
+              </button>
+            </div>
 
-                <button
-                  onClick={handleApplyUpdates}
-                  disabled={!selectedChain || !editedConfig || isApplying}
-                  className={`flex-1 px-6 py-3 rounded-lg font-medium transition-colors ${
-                    selectedChain && editedConfig && !isApplying
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
-                      : 'bg-gray-400 text-white cursor-not-allowed'
-                  }`}
-                >
-                  {isApplying ? 'Applying...' : 'Apply Updates'}
-                </button>
-              </div>
-            )}
-
-            {/* Warp: Action Buttons */}
-            {updateType === 'warp' && (
-              <div className="flex gap-3">
-                <button
-                  onClick={handleReadWarpConfig}
-                  disabled={!selectedChain || !warpRouteAddress || isReadingWarp}
-                  className={`flex-1 px-6 py-3 rounded-lg font-medium transition-colors ${
-                    selectedChain && warpRouteAddress && !isReadingWarp
-                      ? 'bg-gray-600 text-white hover:bg-gray-700'
-                      : 'bg-gray-400 text-white cursor-not-allowed'
-                  }`}
-                >
-                  {isReadingWarp ? 'Reading...' : 'Read Current Config'}
-                </button>
-
-                <button
-                  onClick={handleApplyWarpUpdates}
-                  disabled={!selectedChain || !warpRouteAddress || !editedWarpConfig || isApplyingWarp}
-                  className={`flex-1 px-6 py-3 rounded-lg font-medium transition-colors ${
-                    selectedChain && warpRouteAddress && editedWarpConfig && !isApplyingWarp
-                      ? 'bg-blue-600 text-white hover:bg-blue-700'
-                      : 'bg-gray-400 text-white cursor-not-allowed'
-                  }`}
-                >
-                  {isApplyingWarp ? 'Applying...' : 'Apply Updates'}
-                </button>
-              </div>
-            )}
-
-            {/* Info */}
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-800">
-                <strong>Note:</strong> This will read the current {updateType === 'core' ? 'core' : 'warp route'} configuration from the chain,
-                allow you to edit it, and apply any changes as transactions. Make sure your wallet is connected.
+                <strong>Note:</strong> Read current warp route configuration, edit it, and apply changes. Wallet must be connected.
               </p>
             </div>
           </div>
         )}
 
-        {activeTab === 'chains' && (
-          <div className="space-y-6">
+        {activePage === 'manage-chains' && (
+          <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
             <h2 className="text-2xl font-bold text-gray-900">Manage Custom Chains</h2>
             <p className="text-gray-600">
               Add custom chain metadata to deploy to chains not in the Hyperlane registry.
@@ -985,8 +1097,8 @@ const Home: NextPage = () => {
           </div>
         )}
 
-        {activeTab === 'map' && (
-          <div className="space-y-6">
+        {activePage === 'explorer-map' && (
+          <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
             <h2 className="text-2xl font-bold text-gray-900">Warp Routes Explorer</h2>
             <p className="text-gray-600">
               Interactive graph visualization of warp routes. Click chains to view core configs,
@@ -996,18 +1108,18 @@ const Home: NextPage = () => {
               useTestData={false}
               onChainClick={(chain) => {
                 setSelectedChain(chain);
-                setActiveTab('view');
+                setActivePage('view-deployments');
                 readConfig(chain);
               }}
               onWarpRouteClick={(sourceChain, _targetChain, _routeId, address) => {
                 setSelectedChain(sourceChain);
                 setWarpRouteAddress(address);
-                setUpdateType('warp');
-                setActiveTab('apply');
+                setActivePage('apply-warp');
               }}
             />
           </div>
         )}
+        </div>
       </div>
     </div>
   );
