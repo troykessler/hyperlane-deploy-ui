@@ -152,7 +152,7 @@ export function ChainSelectorModal({ isOpen, onClose, onSelect, selectedChain }:
                         <span className="text-xs text-gray-600">
                           {chainName}
                         </span>
-                        {metadata?.chainId && (
+                        {metadata && metadata.chainId !== undefined && metadata.chainId !== null && (
                           <>
                             <span className="text-xs text-gray-400">•</span>
                             <span className="text-xs text-gray-500">

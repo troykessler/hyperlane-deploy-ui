@@ -112,9 +112,6 @@ export function CoreConfigSelector({
               <p className="text-xs text-gray-500 mt-1">
                 Mailbox: <code className="bg-gray-100 px-1 rounded">{registryAddresses.mailbox}</code>
               </p>
-              <p className="text-xs text-amber-600 mt-1">
-                Note: Registry deployments may be outdated and not fully readable with the current SDK
-              </p>
             </div>
           </div>
         </button>

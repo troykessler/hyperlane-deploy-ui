@@ -690,10 +690,8 @@ const Home: NextPage = () => {
             <h2 className="text-2xl font-bold text-gray-900">Read Core Config</h2>
             <p className="text-gray-600">
               Read the current core configuration from an existing deployment on any chain.
+              No wallet connection required.
             </p>
-
-            {/* Wallet Status */}
-            <WalletStatusBar selectedChain={selectedChain} selectedProtocol={selectedProtocol} />
 
             {/* Chain Selection */}
             <div>
@@ -794,10 +792,8 @@ const Home: NextPage = () => {
             <h2 className="text-2xl font-bold text-gray-900">Read Warp Config</h2>
             <p className="text-gray-600">
               Read the current warp route configuration from an existing deployment.
+              No wallet connection required.
             </p>
-
-            {/* Wallet Status */}
-            <WalletStatusBar selectedChain={selectedChain} selectedProtocol={selectedProtocol} />
 
             {/* Chain Selection */}
             <div>

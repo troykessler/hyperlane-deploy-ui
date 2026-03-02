@@ -54,7 +54,7 @@ export function ChainSelectField({ value, onChange, label }: ChainSelectFieldPro
               </div>
               <div className="flex items-center gap-2 mt-0.5">
                 <span className="text-xs text-gray-600">{value}</span>
-                {metadata?.chainId && (
+                {metadata && metadata.chainId !== undefined && metadata.chainId !== null && (
                   <>
                     <span className="text-xs text-gray-400">•</span>
                     <span className="text-xs text-gray-500">ID: {metadata.chainId}</span>

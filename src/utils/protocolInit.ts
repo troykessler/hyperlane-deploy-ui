@@ -1,8 +1,8 @@
 import { ProtocolType } from '@hyperlane-xyz/utils';
 import { registerProtocol } from '@hyperlane-xyz/provider-sdk';
 import { CosmosNativeProtocolProvider } from '@hyperlane-xyz/cosmos-sdk';
-// import { RadixProtocolProvider } from '@hyperlane-xyz/radix-sdk';
-// import { AleoProtocolProvider } from '@hyperlane-xyz/aleo-sdk';
+import { RadixProtocolProvider } from '@hyperlane-xyz/radix-sdk';
+import { AleoProtocolProvider } from '@hyperlane-xyz/aleo-sdk';
 
 let isInitialized = false;
 
@@ -23,11 +23,25 @@ export function initializeAltVMProtocols() {
     }
   }
 
-  // TODO: Register Radix protocol when available
-  // registerProtocol(ProtocolType.Radix, () => new RadixProtocolProvider());
+  // Register Radix protocol
+  try {
+    registerProtocol(ProtocolType.Radix, () => new RadixProtocolProvider());
+  } catch (error) {
+    // Protocol already registered, ignore
+    if (!(error instanceof Error && error.message.includes('already registered'))) {
+      throw error;
+    }
+  }
 
-  // TODO: Register Aleo protocol when available
-  // registerProtocol(ProtocolType.Aleo, () => new AleoProtocolProvider());
+  // Register Aleo protocol
+  try {
+    registerProtocol(ProtocolType.Aleo, () => new AleoProtocolProvider());
+  } catch (error) {
+    // Protocol already registered, ignore
+    if (!(error instanceof Error && error.message.includes('already registered'))) {
+      throw error;
+    }
+  }
 
   isInitialized = true;
 }
