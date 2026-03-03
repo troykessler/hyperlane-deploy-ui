@@ -1,37 +1,34 @@
-import type { NextPage } from 'next';
-import { useState, useMemo, useEffect } from 'react';
 import { CoreConfig } from '@hyperlane-xyz/provider-sdk/core';
 import { ChainName } from '@hyperlane-xyz/sdk';
-import { useStore } from '../features/store';
-import { useMultiProvider } from '../features/chains/hooks';
-import { ChainSelectField } from '../features/chains/ChainSelectField';
-import { ConfigUpload } from '../features/deploy/ConfigUpload';
-import { ConfigPreview } from '../features/deploy/ConfigPreview';
-import { DeployProgress } from '../features/deploy/DeployProgress';
-import { useCoreDeploy } from '../features/deploy/useCoreDeploy';
-import { DeploymentStatus } from '../features/deploy/types';
-import { useReadCoreConfig } from '../features/coreConfig/useReadCoreConfig';
-import { useApplyCoreConfig } from '../features/coreConfig/useApplyCoreConfig';
-import { CoreConfigEditor } from '../features/coreConfig/CoreConfigEditor';
-import { useWarpRead } from '../features/warp/useWarpRead';
-import { useWarpUpdate } from '../features/warp/useWarpUpdate';
-import { FloatingButtonStrip } from '../components/nav/FloatingButtonStrip';
-import { useWallet } from '../features/wallet/hooks/useWallet';
-import { DeployerInfo } from '../features/wallet/DeployerInfo';
-import { CustomChainsList } from '../features/chains/CustomChainsList';
-import { DeploymentAddresses } from '../components/deploy/DeploymentAddresses';
+import type { NextPage } from 'next';
+import { useEffect, useMemo, useState } from 'react';
 import { CoreConfigSelector } from '../components/deploy/CoreConfigSelector';
+import { DeploymentAddresses } from '../components/deploy/DeploymentAddresses';
 import { WarpConfigSelector } from '../components/deploy/WarpConfigSelector';
-import { WarpConfigUpload } from '../features/warp/WarpConfigUpload';
+import { FloatingButtonStrip } from '../components/nav/FloatingButtonStrip';
+import { NavigationPage, Sidebar } from '../components/nav/Sidebar';
+import { ChainSelectField } from '../features/chains/ChainSelectField';
+import { CustomChainsList } from '../features/chains/CustomChainsList';
+import { useMultiProvider } from '../features/chains/hooks';
+import { CoreFormBuilder } from '../features/core/CoreFormBuilder';
+import { CoreConfigEditor } from '../features/coreConfig/CoreConfigEditor';
+import { useApplyCoreConfig } from '../features/coreConfig/useApplyCoreConfig';
+import { useReadCoreConfig } from '../features/coreConfig/useReadCoreConfig';
+import { ConfigPreview } from '../features/deploy/ConfigPreview';
+import { ConfigUpload } from '../features/deploy/ConfigUpload';
+import { DeployProgress } from '../features/deploy/DeployProgress';
+import { DeploymentStatus } from '../features/deploy/types';
+import { useCoreDeploy } from '../features/deploy/useCoreDeploy';
+import { useStore } from '../features/store';
+import { DeployerInfo } from '../features/wallet/DeployerInfo';
+import { useWallet } from '../features/wallet/hooks/useWallet';
 import { WarpFormBuilder } from '../features/warp/WarpFormBuilder';
 import { WarpMultiChainWizard } from '../features/warp/WarpMultiChainWizard';
-import { WarpConfigPreview } from '../features/warp/WarpConfigPreview';
-import { useWarpDeploy } from '../features/warp/useWarpDeploy';
 import type { WarpConfig } from '../features/warp/types';
-import { WarpRouteSelect } from '../features/warpRoutes/WarpRouteSelect';
-import { CoreFormBuilder } from '../features/core/CoreFormBuilder';
+import { useWarpDeploy } from '../features/warp/useWarpDeploy';
+import { useWarpRead } from '../features/warp/useWarpRead';
+import { useWarpUpdate } from '../features/warp/useWarpUpdate';
 import { WarpRoutesGraph } from '../features/warpMap';
-import { Sidebar, NavigationPage } from '../components/nav/Sidebar';
 
 const Home: NextPage = () => {
   const [activePage, setActivePage] = useState<NavigationPage>('read-core');
@@ -265,7 +262,7 @@ const Home: NextPage = () => {
 
       {/* Main Content */}
       <div className="flex-1 overflow-y-scroll bg-gray-100" style={{ scrollbarGutter: 'stable' }}>
-        <div className="max-w-6xl mx-auto p-6">
+        <div className="min-w-[55rem] max-w-[55rem] mx-auto p-6">
           <FloatingButtonStrip />
 
           {activePage === 'deploy-core' && (
