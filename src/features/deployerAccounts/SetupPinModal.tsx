@@ -53,8 +53,8 @@ export function SetupPinModal({ firstAccount, onComplete, onCancel }: SetupPinMo
       const accounts = firstAccount ? [firstAccount] : [];
       const encrypted = await encryptAccounts(accounts, pin);
 
-      // Store in vault
-      setVaultPin(pinHash, encrypted);
+      // Store in vault (pass PIN to keep in memory while unlocked)
+      setVaultPin(pinHash, encrypted, pin);
 
       onComplete();
     } catch (err) {

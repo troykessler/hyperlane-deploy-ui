@@ -5,7 +5,6 @@ import { FundAccountModal } from './FundAccountModal';
 import { UnlockVaultModal } from './UnlockVaultModal';
 import { SetupPinModal } from './SetupPinModal';
 import { ChangePinModal } from './ChangePinModal';
-import { encryptAccounts } from './vaultEncryption';
 import type { DeployerAccount } from './types';
 
 /**
@@ -20,8 +19,6 @@ export function DeployerAccountsPage() {
     deleteDeployerAccount,
     vaultUnlocked,
     hasVaultPin,
-    lockVault,
-    vaultPinHash,
   } = useStore();
   const [showGenerateModal, setShowGenerateModal] = useState(false);
   const [showSetupPin, setShowSetupPin] = useState(false);
@@ -62,24 +59,6 @@ export function DeployerAccountsPage() {
     setShowGenerateModal(true);
   };
 
-  const handleLockVault = async () => {
-    if (confirm('Lock vault? You will need your PIN to access accounts again.')) {
-      // Re-encrypt accounts before locking
-      const pin = prompt('Enter your 4-digit PIN to lock vault:');
-      if (!pin || pin.length !== 4) {
-        alert('Invalid PIN');
-        return;
-      }
-
-      try {
-        const encrypted = await encryptAccounts(deployerAccounts, pin);
-        lockVault(encrypted);
-      } catch (err) {
-        alert('Failed to lock vault. Incorrect PIN.');
-      }
-    }
-  };
-
   return (
     <div className="space-y-6">
       {/* Security Warning Banner */}
@@ -117,20 +96,12 @@ export function DeployerAccountsPage() {
         </div>
         <div className="flex gap-3">
           {hasVaultPin() && vaultUnlocked && (
-            <>
-              <button
-                onClick={() => setShowChangePin(true)}
-                className="px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
-              >
-                Change PIN
-              </button>
-              <button
-                onClick={handleLockVault}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors"
-              >
-                🔒 Lock Vault
-              </button>
-            </>
+            <button
+              onClick={() => setShowChangePin(true)}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
+            >
+              Change PIN
+            </button>
           )}
           {deployerAccounts.length > 0 && (
             <button

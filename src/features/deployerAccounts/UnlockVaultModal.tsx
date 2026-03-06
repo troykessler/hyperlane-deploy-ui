@@ -58,8 +58,8 @@ export function UnlockVaultModal({ onCancel, onSuccess }: UnlockVaultModalProps 
 
       const decrypted = await decryptAccounts(encryptedVault, pinValue);
 
-      // Unlock vault
-      unlockVault(decrypted);
+      // Unlock vault (pass PIN to keep in memory for re-encryption)
+      unlockVault(decrypted, pinValue);
 
       // Call success callback to close modal
       if (onSuccess) {

@@ -3,6 +3,7 @@ import { ChainName } from '@hyperlane-xyz/sdk';
 import { ProtocolType } from '@hyperlane-xyz/utils';
 import { useMultiProvider } from '../chains/hooks';
 import { useWallet } from './hooks/useWallet';
+import { useStore } from '../store';
 
 interface DeployerInfoProps {
   selectedChain?: ChainName;
@@ -11,14 +12,22 @@ interface DeployerInfoProps {
 
 export function DeployerInfo({ selectedChain, selectedProtocol }: DeployerInfoProps) {
   const wallet = useWallet(selectedChain, selectedProtocol);
+  const { useDeployerAccounts, selectedDeployerAccountId, deployerAccounts } = useStore();
   const multiProvider = useMultiProvider();
   const [balance, setBalance] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Determine which address to display
+  const selectedDeployerAccount = useDeployerAccounts && selectedDeployerAccountId
+    ? deployerAccounts.find(a => a.id === selectedDeployerAccountId)
+    : null;
+  const displayAddress = selectedDeployerAccount?.address || wallet.address;
+  const isUsingDeployerAccount = !!selectedDeployerAccount;
+
   useEffect(() => {
     async function fetchBalance() {
-      if (!wallet.address || !selectedChain) {
+      if (!displayAddress || !selectedChain) {
         setBalance(null);
         setError(null);
         return;
@@ -54,7 +63,7 @@ export function DeployerInfo({ selectedChain, selectedProtocol }: DeployerInfoPr
         let balanceWei: bigint | string;
         try {
           // Use provider's getBalance for EVM chains
-          balanceWei = await (provider as any).getBalance(wallet.address);
+          balanceWei = await (provider as any).getBalance(displayAddress);
         } catch (err) {
           // If balance fetch fails
           const errorMsg = err instanceof Error ? err.message : String(err);
@@ -86,7 +95,7 @@ export function DeployerInfo({ selectedChain, selectedProtocol }: DeployerInfoPr
     }
 
     fetchBalance();
-  }, [wallet.address, selectedChain, multiProvider]);
+  }, [displayAddress, selectedChain, multiProvider]);
 
   // If no chain selected, show placeholder
   if (!selectedChain) {
@@ -99,11 +108,16 @@ export function DeployerInfo({ selectedChain, selectedProtocol }: DeployerInfoPr
     );
   }
 
-  if (!wallet.isConnected || !wallet.address) {
+  // Check if we have a valid account to display
+  const hasAccount = isUsingDeployerAccount ? !!selectedDeployerAccount : (wallet.isConnected && wallet.address);
+
+  if (!hasAccount) {
     return (
       <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
         <p className="text-sm text-amber-800">
-          <strong>No wallet connected</strong> - Please connect your {selectedProtocol || 'wallet'} wallet to deploy contracts.
+          <strong>No account selected</strong> - {isUsingDeployerAccount
+            ? 'Please select a deployer account or unlock vault'
+            : `Please connect your ${selectedProtocol || 'wallet'} wallet to deploy contracts`}.
         </p>
       </div>
     );
@@ -116,12 +130,17 @@ export function DeployerInfo({ selectedChain, selectedProtocol }: DeployerInfoPr
     <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <p className="text-sm font-medium text-blue-900 mb-2">Deployer Account</p>
+          <div className="flex items-center gap-2 mb-2">
+            <p className="text-sm font-medium text-blue-900">Deployer Account</p>
+            <span className="text-xs px-2 py-0.5 bg-blue-200 text-blue-800 rounded">
+              {isUsingDeployerAccount ? 'Deployer Account' : 'Connected Wallet'}
+            </span>
+          </div>
           <div className="space-y-2">
             <div>
               <p className="text-xs text-blue-700 font-medium mb-1">Address</p>
               <code className="text-xs bg-white px-2 py-1 rounded border border-blue-200 font-mono text-blue-900 break-all">
-                {wallet.address}
+                {displayAddress}
               </code>
             </div>
             <div>

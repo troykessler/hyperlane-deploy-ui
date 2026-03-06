@@ -4,7 +4,7 @@ import { CoreConfig } from '@hyperlane-xyz/provider-sdk/core';
 import { AltVMCoreModule } from '@hyperlane-xyz/deploy-sdk';
 import { useMultiProvider } from '../chains/hooks';
 import { createChainLookup } from '../../utils/chainLookup';
-import { createAltVMSigner, createEvmSigner } from '../../utils/signerAdapters';
+import { createAltVMSigner, createEvmSigner, createEvmSignerFromPrivateKey } from '../../utils/signerAdapters';
 import { logger } from '../../utils/logger';
 import { isEvmChain } from '../../utils/protocolUtils';
 
@@ -26,7 +26,8 @@ export function useApplyCoreConfig() {
       chainName: ChainName,
       newConfig: CoreConfig,
       walletClient: any,
-      mailboxAddress?: string
+      mailboxAddress?: string,
+      deployerPrivateKey?: string
     ): Promise<boolean> => {
       try {
         setProgress({
@@ -63,12 +64,17 @@ export function useApplyCoreConfig() {
           // EVM chain: Call mailbox contract methods directly
           const evmMultiProvider = multiProvider.toMultiProvider();
 
-          // Convert wallet client (viem) to ethers signer
-          if (!walletClient) {
-            throw new Error('Wallet not connected');
+          // Create signer from private key or wallet client
+          let signer;
+          if (deployerPrivateKey) {
+            signer = await createEvmSignerFromPrivateKey(deployerPrivateKey, chainMetadata);
+            logger.debug('Using deployer account signer for config update');
+          } else if (walletClient) {
+            signer = await createEvmSigner(walletClient, chainMetadata);
+            logger.debug('Using connected wallet signer for config update');
+          } else {
+            throw new Error('No signer available - connect wallet or select deployer account');
           }
-
-          const signer = await createEvmSigner(walletClient, chainMetadata);
 
           logger.debug('Updating EVM mailbox config', { chainName, mailboxAddress });
 

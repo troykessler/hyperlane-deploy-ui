@@ -4,7 +4,7 @@ import { CoreConfig } from '@hyperlane-xyz/provider-sdk/core';
 import { AltVMCoreModule } from '@hyperlane-xyz/deploy-sdk';
 import { useMultiProvider } from '../chains/hooks';
 import { createChainLookup } from '../../utils/chainLookup';
-import { createAltVMSigner, createEvmSigner } from '../../utils/signerAdapters';
+import { createAltVMSigner, createEvmSigner, createEvmSignerFromPrivateKey } from '../../utils/signerAdapters';
 import { logger } from '../../utils/logger';
 import { DeploymentStatus, DeployResult } from './types';
 import { isEvmChain } from '../../utils/protocolUtils';
@@ -27,7 +27,8 @@ export function useCoreDeploy() {
     async (
       chainName: ChainName,
       config: CoreConfig,
-      walletClient: any
+      walletClient: any,
+      deployerPrivateKey?: string
     ): Promise<DeployResult | null> => {
       try {
         setProgress({
@@ -64,10 +65,17 @@ export function useCoreDeploy() {
           // EVM chain: use EvmCoreModule
           const evmMultiProvider = multiProvider.toMultiProvider();
 
-          // Convert wallet client (viem) to ethers signer
-          if (walletClient) {
+          // Create signer from private key or wallet client
+          if (deployerPrivateKey) {
+            const signer = await createEvmSignerFromPrivateKey(deployerPrivateKey, chainMetadata);
+            evmMultiProvider.setSharedSigner(signer);
+            logger.debug('Using deployer account signer for EVM deployment');
+          } else if (walletClient) {
             const signer = await createEvmSigner(walletClient, chainMetadata);
             evmMultiProvider.setSharedSigner(signer);
+            logger.debug('Using connected wallet signer for EVM deployment');
+          } else {
+            throw new Error('No signer available - connect wallet or select deployer account');
           }
 
           const coreModule = await EvmCoreModule.create({
@@ -80,6 +88,11 @@ export function useCoreDeploy() {
           logger.debug('Core deployment successful (EVM)', { chainName, addresses });
         } else {
           // AltVM chain: use AltVMCoreModule
+          // Note: Deployer accounts currently only supported for EVM chains
+          if (deployerPrivateKey) {
+            throw new Error('Deployer accounts are currently only supported for EVM chains');
+          }
+
           const chainLookup = createChainLookup(multiProvider);
           const signer = await createAltVMSigner(chainMetadata, walletClient);
 

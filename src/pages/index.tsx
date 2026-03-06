@@ -20,6 +20,8 @@ import { DeployProgress } from '../features/deploy/DeployProgress';
 import { DeploymentStatus } from '../features/deploy/types';
 import { useCoreDeploy } from '../features/deploy/useCoreDeploy';
 import { DeployerAccountsPage } from '../features/deployerAccounts/DeployerAccountsPage';
+import { DeployerAccountSelector } from '../features/deployerAccounts/DeployerAccountSelector';
+import { UnlockVaultModal } from '../features/deployerAccounts/UnlockVaultModal';
 import { useStore } from '../features/store';
 import { DeployerInfo } from '../features/wallet/DeployerInfo';
 import { useWallet } from '../features/wallet/hooks/useWallet';
@@ -44,7 +46,21 @@ const Home: NextPage = () => {
   const [warpInputMethod, setWarpInputMethod] = useState<'upload' | 'builder' | 'multichain'>('builder');
   const [warpError, setWarpError] = useState<string>('');
 
-  const { deployments, addDeployment, warpDeployments, addWarpDeployment, currentWarpConfig, setCurrentWarpConfig, customChains, deployerAccounts } = useStore((s) => ({
+  const {
+    deployments,
+    addDeployment,
+    warpDeployments,
+    addWarpDeployment,
+    currentWarpConfig,
+    setCurrentWarpConfig,
+    customChains,
+    deployerAccounts,
+    useDeployerAccounts,
+    selectedDeployerAccountId,
+    hasVaultPin,
+    vaultUnlocked,
+    encryptedVault,
+  } = useStore((s) => ({
     deployments: s.deployments,
     addDeployment: s.addDeployment,
     warpDeployments: s.warpDeployments,
@@ -53,6 +69,11 @@ const Home: NextPage = () => {
     setCurrentWarpConfig: s.setCurrentWarpConfig,
     customChains: s.customChains,
     deployerAccounts: s.deployerAccounts,
+    useDeployerAccounts: s.useDeployerAccounts,
+    selectedDeployerAccountId: s.selectedDeployerAccountId,
+    hasVaultPin: s.hasVaultPin,
+    vaultUnlocked: s.vaultUnlocked,
+    encryptedVault: s.encryptedVault,
   }));
 
   const multiProvider = useMultiProvider();
@@ -67,6 +88,10 @@ const Home: NextPage = () => {
   const [updateType, setUpdateType] = useState<'core' | 'warp'>('core');
   const [editedConfig, setEditedConfig] = useState<CoreConfig | null>(null);
   const [applyError, setApplyError] = useState<string>('');
+
+  // Deployer account vault unlock state
+  const [showVaultUnlock, setShowVaultUnlock] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => Promise<void>) | null>(null);
   const [mailboxAddress, setMailboxAddress] = useState<string>('');
   const [warpRouteAddress, setWarpRouteAddress] = useState<string>('');
   const [editedWarpConfig, setEditedWarpConfig] = useState<WarpConfig | null>(null);
@@ -102,6 +127,43 @@ const Home: NextPage = () => {
     setApplyError('');
   };
 
+  // Helper: Get deployer account private key if using deployer accounts
+  const getDeployerPrivateKey = (): string | undefined => {
+    // Read directly from store to get latest state (not closure)
+    const state = useStore.getState();
+    if (!state.useDeployerAccounts || !state.selectedDeployerAccountId) {
+      return undefined;
+    }
+    const account = state.deployerAccounts.find((a) => a.id === state.selectedDeployerAccountId);
+    return account?.privateKey;
+  };
+
+  // Helper: Check if vault needs unlocking before action
+  const checkVaultAndExecute = async (action: () => Promise<void>) => {
+    // If using deployer accounts and vault is locked, show unlock modal first
+    if (useDeployerAccounts && hasVaultPin() && !vaultUnlocked) {
+      setPendingAction(() => action);
+      setShowVaultUnlock(true);
+      return;
+    }
+
+    // Otherwise execute immediately
+    await action();
+  };
+
+  // Handle successful vault unlock
+  const handleVaultUnlocked = async () => {
+    setShowVaultUnlock(false);
+    if (pendingAction) {
+      // Auto-select first account if none selected and using deployer accounts
+      if (useDeployerAccounts && !selectedDeployerAccountId && deployerAccounts.length > 0) {
+        useStore.getState().setSelectedDeployerAccountId(deployerAccounts[0].id);
+      }
+      await pendingAction();
+      setPendingAction(null);
+    }
+  };
+
   const handleReadConfig = async () => {
     if (!selectedChain) return;
 
@@ -117,98 +179,119 @@ const Home: NextPage = () => {
   };
 
   const handleApplyUpdates = async () => {
-    if (!selectedChain || !editedConfig) {
-      setApplyError('Please select a chain and edit the configuration');
-      return;
-    }
-
-    if (!mailboxAddress) {
-      setApplyError('Mailbox address is required. Please read the config first or enter the mailbox address manually.');
-      return;
-    }
-
-    setApplyError('');
-
-    try {
-      const walletClient = await getWalletClient();
-      if (!walletClient) {
-        setApplyError('Please connect your wallet first');
+    await checkVaultAndExecute(async () => {
+      if (!selectedChain || !editedConfig) {
+        setApplyError('Please select a chain and edit the configuration');
         return;
       }
 
-      const success = await applyConfig(selectedChain, editedConfig, walletClient, mailboxAddress);
-      if (success) {
-        // Refresh the config after successful apply
-        await handleReadConfig();
+      if (!mailboxAddress) {
+        setApplyError('Mailbox address is required. Please read the config first or enter the mailbox address manually.');
+        return;
       }
-    } catch (error) {
-      setApplyError(`Failed to apply updates: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+
+      setApplyError('');
+
+      try {
+        const walletClient = !useDeployerAccounts ? await getWalletClient() : null;
+        const deployerPrivateKey = getDeployerPrivateKey();
+
+        if (!walletClient && !deployerPrivateKey) {
+          setApplyError('Please connect your wallet or select a deployer account');
+          return;
+        }
+
+        const success = await applyConfig(selectedChain, editedConfig, walletClient, mailboxAddress, deployerPrivateKey);
+        if (success) {
+          // Refresh the config after successful apply
+          await handleReadConfig();
+        }
+      } catch (error) {
+        setApplyError(`Failed to apply updates: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      }
+    });
   };
 
   const handleDeploy = async () => {
-    if (!selectedChain || !currentConfig) {
-      setUploadError('Please select a chain and upload a config');
-      return;
-    }
-
-    setUploadError('');
-
-    try {
-      const walletClient = await getWalletClient();
-      if (!walletClient) {
-        setUploadError('Please connect your wallet first');
+    await checkVaultAndExecute(async () => {
+      if (!selectedChain || !currentConfig) {
+        setUploadError('Please select a chain and upload a config');
         return;
       }
 
-      const result = await deploy(selectedChain, currentConfig, walletClient);
+      setUploadError('');
 
-      if (result) {
-        addDeployment({
-          id: `${result.chainName}-${result.timestamp}`,
-          chainName: result.chainName,
-          timestamp: result.timestamp,
-          addresses: result.addresses,
-          config: currentConfig,
-          txHashes: result.txHashes,
+      try {
+        const walletClient = !useDeployerAccounts ? await getWalletClient() : null;
+        const deployerPrivateKey = getDeployerPrivateKey();
+
+        // Debug logging
+        console.log('Deploy state:', {
+          useDeployerAccounts,
+          selectedDeployerAccountId,
+          hasDeployerPrivateKey: !!deployerPrivateKey,
+          hasWalletClient: !!walletClient,
+          deployerAccountsCount: deployerAccounts.length,
         });
+
+        if (!walletClient && !deployerPrivateKey) {
+          setUploadError('Please connect your wallet or select a deployer account');
+          return;
+        }
+
+        const result = await deploy(selectedChain, currentConfig, walletClient, deployerPrivateKey);
+
+        if (result) {
+          addDeployment({
+            id: `${result.chainName}-${result.timestamp}`,
+            chainName: result.chainName,
+            timestamp: result.timestamp,
+            addresses: result.addresses,
+            config: currentConfig,
+            txHashes: result.txHashes,
+          });
+        }
+      } catch (error) {
+        setUploadError(`Failed to deploy: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
-    } catch (error) {
-      setUploadError(`Failed to deploy: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    });
   };
 
   const handleWarpDeploy = async () => {
-    if (!selectedChain || !currentWarpConfig) {
-      setWarpError('Please select a chain and configure the warp route');
-      return;
-    }
-
-    setWarpError('');
-
-    try {
-      const walletClient = await getWalletClient();
-      if (!walletClient) {
-        setWarpError('Please connect your wallet first');
+    await checkVaultAndExecute(async () => {
+      if (!selectedChain || !currentWarpConfig) {
+        setWarpError('Please select a chain and configure the warp route');
         return;
       }
 
-      const result = await deployWarp(selectedChain, currentWarpConfig, walletClient);
+      setWarpError('');
 
-      if (result) {
-        addWarpDeployment({
-          id: `${result.chainName}-${result.timestamp}`,
-          chainName: result.chainName,
-          timestamp: result.timestamp,
-          address: result.address,
-          config: currentWarpConfig,
-          type: currentWarpConfig.type,
-          txHashes: result.txHashes,
-        });
+      try {
+        const walletClient = !useDeployerAccounts ? await getWalletClient() : null;
+        const deployerPrivateKey = getDeployerPrivateKey();
+
+        if (!walletClient && !deployerPrivateKey) {
+          setWarpError('Please connect your wallet or select a deployer account');
+          return;
+        }
+
+        const result = await deployWarp(selectedChain, currentWarpConfig, walletClient, deployerPrivateKey);
+
+        if (result) {
+          addWarpDeployment({
+            id: `${result.chainName}-${result.timestamp}`,
+            chainName: result.chainName,
+            timestamp: result.timestamp,
+            address: result.address,
+            config: currentWarpConfig,
+            type: currentWarpConfig.type,
+            txHashes: result.txHashes,
+          });
+        }
+      } catch (error) {
+        setWarpError(`Failed to deploy: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
-    } catch (error) {
-      setWarpError(`Failed to deploy: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    });
   };
 
   const handleReadWarpConfig = async () => {
@@ -273,7 +356,9 @@ const Home: NextPage = () => {
         <div className="min-w-[55rem] max-w-[55rem] mx-auto p-6">
           <FloatingButtonStrip />
 
-          {activePage === 'deploy-core' && (
+          {activePage === 'deploy-core' && (() => {
+            const hasDeployerAccounts = deployerAccounts.length > 0 || encryptedVault !== null;
+            return (
           <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
             <h2 className="text-2xl font-bold text-gray-900">Deploy Core Contracts</h2>
 
@@ -309,11 +394,19 @@ const Home: NextPage = () => {
               </div>
             </div>
 
+            {/* Deployer Account Selector */}
+            {hasDeployerAccounts && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">1. Select Deployment Source</h3>
+                <DeployerAccountSelector onVaultLocked={() => setShowVaultUnlock(true)} />
+              </div>
+            )}
+
             {/* Upload Method */}
             {coreInputMethod === 'upload' && (
               <>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-3">1. Upload Configuration</h3>
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">{hasDeployerAccounts ? '2' : '1'}. Upload Configuration</h3>
                   <ConfigUpload
                     onConfigLoaded={setCurrentConfig}
                     onError={setUploadError}
@@ -323,7 +416,7 @@ const Home: NextPage = () => {
                 {currentConfig && <ConfigPreview config={currentConfig} />}
 
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-3">2. Select Target Chain</h3>
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">{hasDeployerAccounts ? '3' : '2'}. Select Target Chain</h3>
                   <ChainSelectField value={selectedChain} onChange={setSelectedChain} label="" />
                 </div>
               </>
@@ -333,12 +426,12 @@ const Home: NextPage = () => {
             {coreInputMethod === 'builder' && (
               <>
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-3">1. Select Target Chain</h3>
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">{hasDeployerAccounts ? '2' : '1'}. Select Target Chain</h3>
                   <ChainSelectField value={selectedChain} onChange={setSelectedChain} label="" />
                 </div>
 
                 <div>
-                  <h3 className="text-sm font-medium text-gray-700 mb-3">2. Configure Core Contracts</h3>
+                  <h3 className="text-sm font-medium text-gray-700 mb-3">{hasDeployerAccounts ? '3' : '2'}. Configure Core Contracts</h3>
                   <CoreFormBuilder
                     chainName={selectedChain}
                     initialConfig={currentConfig}
@@ -403,7 +496,8 @@ const Home: NextPage = () => {
               </p>
             </div>
           </div>
-        )}
+            );
+          })()}
 
         {activePage === 'deploy-warp' && (
           <div className="bg-white rounded-lg shadow-md p-6">
@@ -1039,6 +1133,17 @@ const Home: NextPage = () => {
         )}
         </div>
       </div>
+
+      {/* Vault Unlock Modal */}
+      {showVaultUnlock && (
+        <UnlockVaultModal
+          onSuccess={handleVaultUnlocked}
+          onCancel={() => {
+            setShowVaultUnlock(false);
+            setPendingAction(null);
+          }}
+        />
+      )}
     </div>
   );
 };

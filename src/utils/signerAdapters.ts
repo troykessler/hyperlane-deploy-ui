@@ -6,9 +6,38 @@ import { CosmosNativeSigner } from '@hyperlane-xyz/cosmos-sdk';
 import { RadixSigner } from '@hyperlane-xyz/radix-sdk';
 import { AleoSigner } from '@hyperlane-xyz/aleo-sdk';
 import type { OfflineSigner } from '@cosmjs/proto-signing';
-import type { Signer } from 'ethers';
+import { Wallet, type Signer } from 'ethers';
 import type { WalletClient } from 'viem';
 import { walletClientToSigner } from './viemToEthers';
+
+/**
+ * Create EVM signer from private key (for deployer accounts)
+ * Returns ethers Wallet instance connected to RPC provider
+ */
+export async function createEvmSignerFromPrivateKey(
+  privateKey: string,
+  chainMetadata: ChainMetadata
+): Promise<Signer> {
+  if (!privateKey) {
+    throw new Error('Private key not provided');
+  }
+
+  const { providers } = await import('ethers');
+
+  // Get RPC URL from chain metadata
+  const rpcUrl = chainMetadata.rpcUrls[0]?.http;
+  if (!rpcUrl) {
+    throw new Error(`No RPC URL found for chain ${chainMetadata.name}`);
+  }
+
+  // Create provider
+  const provider = new providers.JsonRpcProvider(rpcUrl);
+
+  // Create wallet from private key and connect to provider
+  const wallet = new Wallet(privateKey, provider);
+
+  return wallet;
+}
 
 /**
  * Create EVM signer from wagmi wallet client (viem)

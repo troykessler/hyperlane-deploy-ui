@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { ChainName, EvmWarpModule } from '@hyperlane-xyz/sdk';
 import { AltVMDeployer } from '@hyperlane-xyz/deploy-sdk';
 import { useMultiProvider } from '../chains/hooks';
-import { createAltVMSigner, createEvmSigner } from '../../utils/signerAdapters';
+import { createAltVMSigner, createEvmSigner, createEvmSignerFromPrivateKey } from '../../utils/signerAdapters';
 import { logger } from '../../utils/logger';
 import type { WarpConfig, WarpDeployProgress, WarpDeployResult } from './types';
 import { validateWarpConfig } from './validation';
@@ -19,7 +19,8 @@ export function useWarpDeploy() {
     async (
       chainName: ChainName,
       config: WarpConfig,
-      walletClient: any
+      walletClient: any,
+      deployerPrivateKey?: string
     ): Promise<WarpDeployResult | null> => {
       try {
         setProgress({
@@ -54,10 +55,17 @@ export function useWarpDeploy() {
           // EVM chain: use EvmWarpModule
           const evmMultiProvider = multiProvider.toMultiProvider();
 
-          // Convert wallet client (viem) to ethers signer
-          if (walletClient) {
+          // Create signer from private key or wallet client
+          if (deployerPrivateKey) {
+            const signer = await createEvmSignerFromPrivateKey(deployerPrivateKey, chainMetadata);
+            evmMultiProvider.setSharedSigner(signer);
+            logger.debug('Using deployer account signer for warp deployment');
+          } else if (walletClient) {
             const signer = await createEvmSigner(walletClient, chainMetadata);
             evmMultiProvider.setSharedSigner(signer);
+            logger.debug('Using connected wallet signer for warp deployment');
+          } else {
+            throw new Error('No signer available - connect wallet or select deployer account');
           }
 
           const module = await EvmWarpModule.create({
@@ -71,6 +79,11 @@ export function useWarpDeploy() {
           logger.debug('Warp route deployment successful (EVM)', { chainName, addresses });
         } else {
           // AltVM chain: use AltVMDeployer
+          // Note: Deployer accounts currently only supported for EVM chains
+          if (deployerPrivateKey) {
+            throw new Error('Deployer accounts are currently only supported for EVM chains');
+          }
+
           const signer = await createAltVMSigner(chainMetadata, walletClient);
           const deployer = new AltVMDeployer({ [chainName]: signer });
           addresses = await deployer.deploy({ [chainName]: config });
