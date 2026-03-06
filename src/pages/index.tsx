@@ -19,6 +19,7 @@ import { ConfigUpload } from '../features/deploy/ConfigUpload';
 import { DeployProgress } from '../features/deploy/DeployProgress';
 import { DeploymentStatus } from '../features/deploy/types';
 import { useCoreDeploy } from '../features/deploy/useCoreDeploy';
+import { DeployerAccountsPage } from '../features/deployerAccounts/DeployerAccountsPage';
 import { useStore } from '../features/store';
 import { DeployerInfo } from '../features/wallet/DeployerInfo';
 import { useWallet } from '../features/wallet/hooks/useWallet';
@@ -43,7 +44,7 @@ const Home: NextPage = () => {
   const [warpInputMethod, setWarpInputMethod] = useState<'upload' | 'builder' | 'multichain'>('builder');
   const [warpError, setWarpError] = useState<string>('');
 
-  const { deployments, addDeployment, warpDeployments, addWarpDeployment, currentWarpConfig, setCurrentWarpConfig, customChains } = useStore((s) => ({
+  const { deployments, addDeployment, warpDeployments, addWarpDeployment, currentWarpConfig, setCurrentWarpConfig, customChains, deployerAccounts } = useStore((s) => ({
     deployments: s.deployments,
     addDeployment: s.addDeployment,
     warpDeployments: s.warpDeployments,
@@ -51,6 +52,7 @@ const Home: NextPage = () => {
     currentWarpConfig: s.currentWarpConfig,
     setCurrentWarpConfig: s.setCurrentWarpConfig,
     customChains: s.customChains,
+    deployerAccounts: s.deployerAccounts,
   }));
 
   const multiProvider = useMultiProvider();
@@ -120,6 +122,11 @@ const Home: NextPage = () => {
       return;
     }
 
+    if (!mailboxAddress) {
+      setApplyError('Mailbox address is required. Please read the config first or enter the mailbox address manually.');
+      return;
+    }
+
     setApplyError('');
 
     try {
@@ -129,7 +136,7 @@ const Home: NextPage = () => {
         return;
       }
 
-      const success = await applyConfig(selectedChain, editedConfig, walletClient);
+      const success = await applyConfig(selectedChain, editedConfig, walletClient, mailboxAddress);
       if (success) {
         // Refresh the config after successful apply
         await handleReadConfig();
@@ -258,6 +265,7 @@ const Home: NextPage = () => {
         onNavigate={setActivePage}
         deploymentCount={deployments.length + warpDeployments.length}
         customChainCount={Object.keys(customChains).length}
+        deployerAccountCount={deployerAccounts.length}
       />
 
       {/* Main Content */}
@@ -987,6 +995,12 @@ const Home: NextPage = () => {
                 <strong>Note:</strong> Read current warp route configuration, edit it, and apply changes. Wallet must be connected.
               </p>
             </div>
+          </div>
+        )}
+
+        {activePage === 'deployer-accounts' && (
+          <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
+            <DeployerAccountsPage />
           </div>
         )}
 

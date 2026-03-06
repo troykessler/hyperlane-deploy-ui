@@ -22,6 +22,29 @@ export function WarpIsmConfigForm({ value, onChange }: WarpIsmConfigFormProps) {
     existingConfig && 'threshold' in existingConfig ? existingConfig.threshold : 1
   );
 
+  // Update internal state when value prop changes (e.g., after reading config)
+  useEffect(() => {
+    if (typeof value === 'string') {
+      setUseAddress(true);
+      setIsmAddress(value);
+    } else if (value && typeof value === 'object') {
+      setUseAddress(false);
+      // Update ismType from the config
+      if ('type' in value) {
+        const configType = value.type as 'merkleRootMultisigIsm' | 'messageIdMultisigIsm' | 'testIsm';
+        setIsmType(configType);
+      }
+      // Update validators if present
+      if ('validators' in value && Array.isArray(value.validators)) {
+        setValidators(value.validators);
+      }
+      // Update threshold if present
+      if ('threshold' in value && typeof value.threshold === 'number') {
+        setThreshold(value.threshold);
+      }
+    }
+  }, [value]);
+
   // Auto-build config when dependencies change
   useEffect(() => {
     if (useAddress) return;

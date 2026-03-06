@@ -59,20 +59,53 @@ export function useReadCoreConfig() {
           addressLength: mailboxAddress.length
         });
 
-        // Use appropriate reader based on chain protocol type
-        let config;
+        // Read just the addresses from the mailbox, not full configs
+        // This makes updates simpler - we store addresses, not complex ISM/hook configs
+        let config: CoreConfig;
         try {
           if (isEvmChain(chainMetadata)) {
-            // Use EVM reader for Ethereum chains
+            // EVM: Read addresses directly from mailbox contract
             const evmMultiProvider = multiProvider.toMultiProvider();
-            const reader = new EvmCoreReader(evmMultiProvider, chainName);
-            config = await reader.deriveCoreConfig({ mailbox: mailboxAddress });
+            const provider = evmMultiProvider.getProvider(chainName);
+
+            const { Contract } = await import('ethers');
+            const mailboxAbi = [
+              'function owner() view returns (address)',
+              'function defaultIsm() view returns (address)',
+              'function defaultHook() view returns (address)',
+              'function requiredHook() view returns (address)',
+            ];
+            const mailboxContract = new Contract(mailboxAddress, mailboxAbi, provider);
+
+            const [owner, defaultIsm, defaultHook, requiredHook] = await Promise.all([
+              mailboxContract.owner(),
+              mailboxContract.defaultIsm(),
+              mailboxContract.defaultHook(),
+              mailboxContract.requiredHook(),
+            ]);
+
+            config = {
+              owner,
+              defaultIsm,
+              defaultHook,
+              requiredHook,
+            };
           } else {
-            // Use AltVM reader for non-EVM chains (Cosmos, Radix, Aleo, etc.)
+            // AltVM: Try to read addresses from mailbox
             const protocolProvider = getProtocolProvider(chainMetadata.protocol);
             const provider = await protocolProvider.createProvider(chainMetadata);
             const reader = new AltVMCoreReader(chainMetadata, chainLookup, provider);
-            config = await reader.read(mailboxAddress);
+
+            // The AltVM reader might return full configs, but we'll try to extract addresses
+            const fullConfig = await reader.read(mailboxAddress);
+
+            // Convert config objects to addresses where possible
+            config = {
+              owner: fullConfig.owner,
+              defaultIsm: typeof fullConfig.defaultIsm === 'string' ? fullConfig.defaultIsm : fullConfig.defaultIsm,
+              defaultHook: typeof fullConfig.defaultHook === 'string' ? fullConfig.defaultHook : fullConfig.defaultHook,
+              requiredHook: typeof fullConfig.requiredHook === 'string' ? fullConfig.requiredHook : fullConfig.requiredHook,
+            };
           }
         } catch (readError) {
           const errorMsg = readError instanceof Error ? readError.message : String(readError);

@@ -20,6 +20,7 @@ import { config } from '../consts/config';
 import { logger } from '../utils/logger';
 import { initializeAltVMProtocols } from '../utils/protocolInit';
 import { assembleChainMetadata } from './chains/metadata';
+import type { DeployerAccount } from './deployerAccounts/types';
 import type {
   WarpConfig,
   WarpConfigInputMethod,
@@ -30,7 +31,7 @@ import type {
 initializeAltVMProtocols();
 
 // Increment this when persist state has breaking changes
-const PERSIST_STATE_VERSION = 3;
+const PERSIST_STATE_VERSION = 4;
 
 export type DeploymentStatus = 'pending' | 'deploying' | 'success' | 'failed';
 export type DeploymentType = 'core' | 'warp' | 'update';
@@ -96,6 +97,25 @@ export interface AppState {
   warpMultiChainConfigs: Record<ChainName, WarpConfig>;
   setWarpChainConfig: (chain: ChainName, config: WarpConfig) => void;
   clearWarpMultiChainConfigs: () => void;
+
+  // Deployer accounts state
+  deployerAccounts: DeployerAccount[];
+  addDeployerAccount: (account: DeployerAccount) => void;
+  deleteDeployerAccount: (accountId: string) => void;
+  clearAllDeployerAccounts: () => void;
+  useDeployerAccounts: boolean;
+  setUseDeployerAccounts: (use: boolean) => void;
+  selectedDeployerAccountId: string | null;
+  setSelectedDeployerAccountId: (accountId: string | null) => void;
+
+  // Vault protection state
+  vaultPinHash: string | null;
+  encryptedVault: string | null;
+  vaultUnlocked: boolean;
+  setVaultPin: (pinHash: string, encryptedAccounts: string) => void;
+  unlockVault: (decryptedAccounts: DeployerAccount[]) => void;
+  lockVault: (encryptedAccounts: string) => void;
+  hasVaultPin: () => boolean;
 
   // Shared component state
   isSideBarOpen: boolean;
@@ -249,6 +269,66 @@ export const useStore = create<AppState>()(
         set(() => ({ warpMultiChainConfigs: {} }));
       },
 
+      // Deployer accounts state
+      deployerAccounts: [],
+      addDeployerAccount: (account) => {
+        set((state) => ({
+          deployerAccounts: [...state.deployerAccounts, account],
+        }));
+      },
+      deleteDeployerAccount: (accountId) => {
+        set((state) => ({
+          deployerAccounts: state.deployerAccounts.filter((a) => a.id !== accountId),
+          // Clear selection if deleting selected account
+          selectedDeployerAccountId:
+            state.selectedDeployerAccountId === accountId ? null : state.selectedDeployerAccountId,
+        }));
+      },
+      clearAllDeployerAccounts: () => {
+        set(() => ({
+          deployerAccounts: [],
+          selectedDeployerAccountId: null,
+        }));
+      },
+      useDeployerAccounts: false,
+      setUseDeployerAccounts: (use) => {
+        set(() => ({ useDeployerAccounts: use }));
+      },
+      selectedDeployerAccountId: null,
+      setSelectedDeployerAccountId: (accountId) => {
+        set(() => ({ selectedDeployerAccountId: accountId }));
+      },
+
+      // Vault protection state
+      vaultPinHash: null,
+      encryptedVault: null,
+      vaultUnlocked: false,
+      setVaultPin: (pinHash, encryptedAccounts) => {
+        set(() => ({
+          vaultPinHash: pinHash,
+          encryptedVault: encryptedAccounts,
+          vaultUnlocked: true,
+          deployerAccounts: [], // Clear plaintext accounts
+        }));
+      },
+      unlockVault: (decryptedAccounts) => {
+        set(() => ({
+          vaultUnlocked: true,
+          deployerAccounts: decryptedAccounts,
+        }));
+      },
+      lockVault: (encryptedAccounts) => {
+        set(() => ({
+          vaultUnlocked: false,
+          encryptedVault: encryptedAccounts,
+          deployerAccounts: [], // Clear plaintext accounts from memory
+          selectedDeployerAccountId: null,
+        }));
+      },
+      hasVaultPin: () => {
+        return get().vaultPinHash !== null;
+      },
+
       // Shared component state
       isSideBarOpen: false,
       setIsSideBarOpen: (isSideBarOpen) => {
@@ -270,6 +350,14 @@ export const useStore = create<AppState>()(
         deployments: state.deployments,
         selectedChain: state.selectedChain,
         warpDeployments: state.warpDeployments,
+        // Only persist plaintext accounts if no vault PIN is set
+        deployerAccounts: state.vaultPinHash ? [] : state.deployerAccounts,
+        useDeployerAccounts: state.useDeployerAccounts,
+        selectedDeployerAccountId: state.selectedDeployerAccountId,
+        vaultPinHash: state.vaultPinHash,
+        encryptedVault: state.encryptedVault,
+        // Always rehydrate as locked for security
+        vaultUnlocked: false,
       }),
       version: PERSIST_STATE_VERSION,
       onRehydrateStorage: () => {
@@ -279,6 +367,14 @@ export const useStore = create<AppState>()(
             logger.error('Error during hydration', error);
             return;
           }
+
+          // Security: Ensure vault is locked and accounts cleared on rehydration
+          if (state.vaultPinHash) {
+            state.vaultUnlocked = false;
+            state.deployerAccounts = [];
+            logger.debug('Vault locked on rehydration');
+          }
+
           initDeployContext({
             registry: state.registry,
             chainMetadataOverrides: state.chainMetadataOverrides,

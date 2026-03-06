@@ -32,6 +32,18 @@ export function CoreFormBuilder({ chainName, initialConfig, onChange }: CoreForm
     typeof initialConfig?.requiredHook === 'string'
   );
 
+  // Update state when initialConfig changes (e.g., after reading config)
+  useEffect(() => {
+    if (initialConfig) {
+      setOwner(initialConfig.owner || '');
+      setDefaultIsm(initialConfig.defaultIsm);
+      setDefaultHook(initialConfig.defaultHook);
+      setRequiredHook(initialConfig.requiredHook);
+      setDefaultHookUseAddress(typeof initialConfig.defaultHook === 'string');
+      setRequiredHookUseAddress(typeof initialConfig.requiredHook === 'string');
+    }
+  }, [initialConfig]);
+
   // Build config whenever fields change
   useEffect(() => {
     if (!owner || !defaultIsm || !defaultHook || !requiredHook) {

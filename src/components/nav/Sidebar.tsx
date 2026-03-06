@@ -9,7 +9,8 @@ export type NavigationPage =
   | 'apply-warp'
   | 'view-deployments'
   | 'explorer-map'
-  | 'manage-chains';
+  | 'manage-chains'
+  | 'deployer-accounts';
 
 interface NavItem {
   id: NavigationPage;
@@ -27,9 +28,10 @@ interface SidebarProps {
   onNavigate: (page: NavigationPage) => void;
   deploymentCount: number;
   customChainCount: number;
+  deployerAccountCount: number;
 }
 
-export function Sidebar({ activePage, onNavigate, deploymentCount, customChainCount }: SidebarProps) {
+export function Sidebar({ activePage, onNavigate, deploymentCount, customChainCount, deployerAccountCount }: SidebarProps) {
   const sections: NavSection[] = [
     {
       title: 'READ',
@@ -56,6 +58,7 @@ export function Sidebar({ activePage, onNavigate, deploymentCount, customChainCo
       title: 'MANAGE',
       items: [
         { id: 'view-deployments', label: 'View Deployments' },
+        { id: 'deployer-accounts', label: 'Deployer Accounts' },
         { id: 'manage-chains', label: 'Custom Chains' },
       ],
     },
@@ -95,6 +98,11 @@ export function Sidebar({ activePage, onNavigate, deploymentCount, customChainCo
                     {item.id === 'view-deployments' && deploymentCount > 0 && (
                       <span className="px-2 py-0.5 text-xs bg-gray-200 text-gray-700 rounded-full">
                         {deploymentCount}
+                      </span>
+                    )}
+                    {item.id === 'deployer-accounts' && deployerAccountCount > 0 && (
+                      <span className="px-2 py-0.5 text-xs bg-gray-200 text-gray-700 rounded-full">
+                        {deployerAccountCount}
                       </span>
                     )}
                     {item.id === 'manage-chains' && customChainCount > 0 && (

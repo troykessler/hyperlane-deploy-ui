@@ -25,7 +25,8 @@ export function useApplyCoreConfig() {
     async (
       chainName: ChainName,
       newConfig: CoreConfig,
-      walletClient: any
+      walletClient: any,
+      mailboxAddress?: string
     ): Promise<boolean> => {
       try {
         setProgress({
@@ -43,49 +44,230 @@ export function useApplyCoreConfig() {
           message: 'Applying configuration updates...',
         });
 
-        logger.debug('Creating core module for update', { chainName });
+        if (!mailboxAddress) {
+          throw new Error('Mailbox address is required for updates. Please provide the mailbox address.');
+        }
 
-        let txs: any[];
+        logger.debug('Applying core config update', {
+          chainName,
+          mailboxAddress,
+          newConfig,
+          defaultIsmType: typeof newConfig.defaultIsm,
+          defaultHookType: typeof newConfig.defaultHook,
+          requiredHookType: typeof newConfig.requiredHook,
+        });
+
+        let txCount = 0;
 
         if (isEvmChain(chainMetadata)) {
-          // EVM chain: use EvmCoreModule
+          // EVM chain: Call mailbox contract methods directly
           const evmMultiProvider = multiProvider.toMultiProvider();
 
           // Convert wallet client (viem) to ethers signer
-          if (walletClient) {
-            const signer = await createEvmSigner(walletClient, chainMetadata);
-            evmMultiProvider.setSharedSigner(signer);
+          if (!walletClient) {
+            throw new Error('Wallet not connected');
           }
 
-          const coreModule = await EvmCoreModule.create({
-            chain: chainName,
-            config: newConfig,
-            multiProvider: evmMultiProvider,
+          const signer = await createEvmSigner(walletClient, chainMetadata);
+
+          logger.debug('Updating EVM mailbox config', { chainName, mailboxAddress });
+
+          // Get mailbox contract instance
+          const { Contract } = await import('ethers');
+          const mailboxAbi = [
+            'function defaultIsm() view returns (address)',
+            'function defaultHook() view returns (address)',
+            'function requiredHook() view returns (address)',
+            'function owner() view returns (address)',
+            'function setDefaultIsm(address _module) external',
+            'function setDefaultHook(address _hook) external',
+            'function setRequiredHook(address _hook) external',
+            'function transferOwnership(address newOwner) external',
+          ];
+          const mailbox = new Contract(mailboxAddress, mailboxAbi, signer);
+
+          // Read current config
+          const [currentIsm, currentDefaultHook, currentRequiredHook, currentOwner] =
+            await Promise.all([
+              mailbox.defaultIsm(),
+              mailbox.defaultHook(),
+              mailbox.requiredHook(),
+              mailbox.owner(),
+            ]);
+
+          logger.debug('Current mailbox state', {
+            currentIsm,
+            currentDefaultHook,
+            currentRequiredHook,
+            currentOwner,
           });
 
-          logger.debug('Applying config update (EVM)', { chainName, newConfig });
-          txs = await coreModule.update(newConfig);
+          // Update defaultIsm if changed
+          if (newConfig.defaultIsm) {
+            if (typeof newConfig.defaultIsm === 'string') {
+              const newIsm = newConfig.defaultIsm.toLowerCase();
+              if (newIsm !== currentIsm.toLowerCase()) {
+                logger.debug('Updating default ISM with address', { from: currentIsm, to: newIsm });
+                const tx = await mailbox.setDefaultIsm(newConfig.defaultIsm);
+                await tx.wait();
+                logger.debug('Default ISM updated', { txHash: tx.hash });
+                txCount++;
+              }
+            } else if (typeof newConfig.defaultIsm === 'object') {
+              // ISM is a config object that needs deployment
+              logger.debug('ISM is a config object, needs deployment first', { config: newConfig.defaultIsm });
+              throw new Error(
+                'Cannot deploy ISM config objects directly yet. ' +
+                'Please deploy the ISM separately and use its address instead. ' +
+                'In the form, toggle "Use existing address" and enter the deployed ISM address.'
+              );
+            }
+          }
+
+          // Update defaultHook if changed
+          if (typeof newConfig.defaultHook === 'string') {
+            const newHook = newConfig.defaultHook.toLowerCase();
+            if (newHook !== currentDefaultHook.toLowerCase()) {
+              logger.debug('Updating default hook', { from: currentDefaultHook, to: newHook });
+              const tx = await mailbox.setDefaultHook(newConfig.defaultHook);
+              await tx.wait();
+              logger.debug('Default hook updated', { txHash: tx.hash });
+              txCount++;
+            }
+          }
+
+          // Update requiredHook if changed
+          if (typeof newConfig.requiredHook === 'string') {
+            const newHook = newConfig.requiredHook.toLowerCase();
+            if (newHook !== currentRequiredHook.toLowerCase()) {
+              logger.debug('Updating required hook', { from: currentRequiredHook, to: newHook });
+              const tx = await mailbox.setRequiredHook(newConfig.requiredHook);
+              await tx.wait();
+              logger.debug('Required hook updated', { txHash: tx.hash });
+              txCount++;
+            }
+          }
+
+          // Update owner if changed
+          if (newConfig.owner && newConfig.owner.toLowerCase() !== currentOwner.toLowerCase()) {
+            logger.debug('Transferring ownership', { from: currentOwner, to: newConfig.owner });
+            const tx = await mailbox.transferOwnership(newConfig.owner);
+            await tx.wait();
+            logger.debug('Ownership transferred', { txHash: tx.hash });
+            txCount++;
+          }
         } else {
-          // AltVM chain: use AltVMCoreModule
-          const chainLookup = createChainLookup(multiProvider);
+          // AltVM chain: Call update methods via signer
+          logger.debug('Creating AltVM signer', { chainName });
           const signer = await createAltVMSigner(chainMetadata, walletClient);
 
-          const coreModule = await AltVMCoreModule.create({
-            chain: chainName,
-            config: newConfig,
-            chainLookup,
-            signer,
-          });
+          logger.debug('Updating AltVM mailbox config', { chainName, mailboxAddress });
 
-          logger.debug('Applying config update (AltVM)', { chainName, newConfig });
-          txs = await coreModule.update(newConfig);
+          // Update ISM if changed
+          if (newConfig.defaultIsm) {
+            if (typeof newConfig.defaultIsm === 'string') {
+              logger.debug('Updating default ISM with address', { ism: newConfig.defaultIsm });
+              try {
+                if (typeof signer.setDefaultIsm === 'function') {
+                  await signer.setDefaultIsm({
+                    mailboxAddress,
+                    ismAddress: newConfig.defaultIsm,
+                  });
+                  txCount++;
+                } else {
+                  logger.warn('setDefaultIsm not available on signer');
+                }
+              } catch (error) {
+                logger.error('Failed to update default ISM', error);
+                throw error;
+              }
+            } else if (typeof newConfig.defaultIsm === 'object') {
+              // ISM is a config object that needs deployment
+              logger.debug('ISM is a config object, attempting to deploy', { config: newConfig.defaultIsm });
+              try {
+                if (typeof signer.deployAndSetIsm === 'function') {
+                  await signer.deployAndSetIsm({
+                    mailboxAddress,
+                    ismConfig: newConfig.defaultIsm,
+                  });
+                  txCount++;
+                } else {
+                  throw new Error(
+                    'Cannot deploy ISM config objects on this chain yet. ' +
+                    'Please deploy the ISM separately and use its address instead. ' +
+                    'Toggle "Use existing address" in the ISM form and enter the deployed ISM address.'
+                  );
+                }
+              } catch (error) {
+                logger.error('Failed to deploy and set ISM', error);
+                throw error;
+              }
+            }
+          }
+
+          // Update default hook if changed and is an address
+          if (typeof newConfig.defaultHook === 'string') {
+            logger.debug('Updating default hook', { hook: newConfig.defaultHook });
+            try {
+              if (typeof signer.setDefaultHook === 'function') {
+                await signer.setDefaultHook({
+                  mailboxAddress,
+                  hookAddress: newConfig.defaultHook,
+                });
+                txCount++;
+              } else {
+                logger.warn('setDefaultHook not available on signer');
+              }
+            } catch (error) {
+              logger.error('Failed to update default hook', error);
+              throw error;
+            }
+          }
+
+          // Update required hook if changed and is an address
+          if (typeof newConfig.requiredHook === 'string') {
+            logger.debug('Updating required hook', { hook: newConfig.requiredHook });
+            try {
+              if (typeof signer.setRequiredHook === 'function') {
+                await signer.setRequiredHook({
+                  mailboxAddress,
+                  hookAddress: newConfig.requiredHook,
+                });
+                txCount++;
+              } else {
+                logger.warn('setRequiredHook not available on signer');
+              }
+            } catch (error) {
+              logger.error('Failed to update required hook', error);
+              throw error;
+            }
+          }
+
+          // Update owner if changed
+          if (newConfig.owner) {
+            logger.debug('Transferring ownership', { owner: newConfig.owner });
+            try {
+              if (typeof signer.transferOwnership === 'function') {
+                await signer.transferOwnership({
+                  mailboxAddress,
+                  newOwner: newConfig.owner,
+                });
+                txCount++;
+              } else {
+                logger.warn('transferOwnership not available on signer - skipping ownership transfer');
+              }
+            } catch (error) {
+              logger.error('Failed to transfer ownership', error);
+              throw error;
+            }
+          }
         }
 
-        logger.debug('Config update successful', { chainName, txCount: txs.length });
+        logger.debug('Config update successful', { chainName, txCount });
 
         setProgress({
           status: 'success',
-          message: `Successfully applied ${txs.length} transaction(s)`,
+          message: `Successfully applied ${txCount} transaction(s)`,
         });
 
         return true;
