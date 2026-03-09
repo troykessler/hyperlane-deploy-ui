@@ -1,4 +1,3 @@
-import { useCallback } from 'react';
 import { ChainName } from '@hyperlane-xyz/sdk';
 import { WarpFormBuilder } from './WarpFormBuilder';
 import { CoreConfigSelector } from '../../components/deploy/CoreConfigSelector';
@@ -115,6 +114,7 @@ export function WarpChainConfigList({
                     Configure Warp Route
                   </h4>
                   <WarpFormBuilder
+                    key={chain}
                     chainName={chain}
                     initialConfig={config}
                     onChange={(newConfig) => onConfigChange(chain, newConfig)}

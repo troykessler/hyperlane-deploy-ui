@@ -58,13 +58,6 @@ export function WarpMultiChainWizard() {
 
   // Watch for vault unlock and trigger deployment if pending
   useEffect(() => {
-    console.log('[useEffect] Vault unlock check:', {
-      vaultUnlocked,
-      pendingDeployAfterUnlock,
-      deployerAccountsCount: deployerAccounts.length,
-      selectedChainsCount: selectedChains.length,
-    });
-
     if (vaultUnlocked && pendingDeployAfterUnlock) {
       // Verify all required deployer keys are actually available before proceeding
       const allKeysAvailable = selectedChains.every((chain) => {
@@ -72,18 +65,12 @@ export function WarpMultiChainWizard() {
         if (!useDeployer) return true; // Not using deployer for this chain
 
         const privateKey = getDeployerPrivateKeyForChain(chain);
-        console.log(`[useEffect] Chain ${chain} key check:`, { useDeployer, hasKey: !!privateKey });
         return !!privateKey; // Must have valid private key
       });
 
-      console.log('[useEffect] All keys available?', allKeysAvailable);
-
       if (allKeysAvailable) {
-        console.log('[useEffect] Triggering deployment with skipVaultCheck=true');
         setPendingDeployAfterUnlock(false);
         handleDeploy(true);
-      } else {
-        console.warn('[useEffect] Not all keys available yet, waiting...');
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -146,24 +133,11 @@ export function WarpMultiChainWizard() {
     const useDeployer = chainDeployerSources[chain];
     const accountId = chainDeployerAccounts[chain];
 
-    console.log(`[getDeployerPrivateKeyForChain] ${chain}:`, {
-      useDeployer,
-      accountId,
-      deployerAccountsCount: deployerAccounts.length,
-      deployerAccountsWithKeys: deployerAccounts.filter(a => a.privateKey && a.privateKey.length > 0).length,
-    });
-
     if (!useDeployer || !accountId) {
       return undefined;
     }
 
     const account = deployerAccounts.find((a) => a.id === accountId);
-    console.log(`[getDeployerPrivateKeyForChain] Found account for ${chain}:`, {
-      found: !!account,
-      hasKey: !!account?.privateKey,
-      keyLength: account?.privateKey?.length,
-    });
-
     const privateKey = account?.privateKey;
     // Return undefined if private key is empty (vault locked)
     return privateKey && privateKey.length > 0 ? privateKey : undefined;
@@ -224,12 +198,9 @@ export function WarpMultiChainWizard() {
 
       // Build per-chain deployer private keys map and validate
       const deployerPrivateKeys: Record<ChainName, string | undefined> = {};
-      console.log('[handleDeploy] Building deployer keys map, skipVaultCheck:', skipVaultCheck);
       for (const chain of selectedChains) {
         const useDeployer = chainDeployerSources[chain];
         const privateKey = getDeployerPrivateKeyForChain(chain);
-
-        console.log(`[handleDeploy] Chain ${chain}:`, { useDeployer, hasKey: !!privateKey });
 
         // Validate: if deployer source selected, must have valid key
         if (useDeployer && !privateKey) {
