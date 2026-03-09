@@ -1,8 +1,16 @@
 import { useState, useCallback } from 'react';
 import { ChainName, EvmWarpModule } from '@hyperlane-xyz/sdk';
 import { AltVMDeployer } from '@hyperlane-xyz/deploy-sdk';
+import { ProtocolType } from '@hyperlane-xyz/utils';
 import { useMultiProvider } from '../chains/hooks';
-import { createAltVMSigner, createEvmSigner, createEvmSignerFromPrivateKey } from '../../utils/signerAdapters';
+import {
+  createAltVMSigner,
+  createEvmSigner,
+  createEvmSignerFromPrivateKey,
+  createCosmosSignerFromPrivateKey,
+  createRadixSignerFromPrivateKey,
+  createAleoSignerFromPrivateKey
+} from '../../utils/signerAdapters';
 import { logger } from '../../utils/logger';
 import type { WarpConfig, WarpDeployProgress, WarpDeployResult } from './types';
 import { validateWarpConfig } from './validation';
@@ -79,12 +87,34 @@ export function useWarpDeploy() {
           logger.debug('Warp route deployment successful (EVM)', { chainName, addresses });
         } else {
           // AltVM chain: use AltVMDeployer
-          // Note: Deployer accounts currently only supported for EVM chains
+          // Create signer from private key or wallet client
+          let signer;
           if (deployerPrivateKey) {
-            throw new Error('Deployer accounts are currently only supported for EVM chains');
+            // Use deployer account
+            switch (chainMetadata.protocol) {
+              case ProtocolType.CosmosNative:
+                signer = await createCosmosSignerFromPrivateKey(deployerPrivateKey, chainMetadata);
+                logger.debug('Using Cosmos deployer account signer for warp deployment');
+                break;
+              case ProtocolType.Radix:
+                signer = await createRadixSignerFromPrivateKey(deployerPrivateKey, chainMetadata);
+                logger.debug('Using Radix deployer account signer for warp deployment');
+                break;
+              case ProtocolType.Aleo:
+                signer = await createAleoSignerFromPrivateKey(deployerPrivateKey, chainMetadata);
+                logger.debug('Using Aleo deployer account signer for warp deployment');
+                break;
+              default:
+                throw new Error(`Deployer accounts not yet supported for ${chainMetadata.protocol}`);
+            }
+          } else if (walletClient) {
+            // Use connected wallet
+            signer = await createAltVMSigner(chainMetadata, walletClient);
+            logger.debug('Using connected wallet signer for warp deployment');
+          } else {
+            throw new Error('No signer available - connect wallet or select deployer account');
           }
 
-          const signer = await createAltVMSigner(chainMetadata, walletClient);
           const deployer = new AltVMDeployer({ [chainName]: signer });
           addresses = await deployer.deploy({ [chainName]: config });
           deployedAddress = addresses[chainName];

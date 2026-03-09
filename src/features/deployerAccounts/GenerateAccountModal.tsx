@@ -13,30 +13,46 @@ interface GenerateAccountModalProps {
  * Currently supports EVM only
  */
 export function GenerateAccountModal({ onClose }: GenerateAccountModalProps) {
-  const { addDeployerAccount, hasVaultPin } = useStore();
+  const { addDeployerAccount, hasVaultPin, vaultUnlocked } = useStore();
   const [selectedProtocol, setSelectedProtocol] = useState<ProtocolType>(ProtocolType.Ethereum);
   const [generatedAccount, setGeneratedAccount] = useState<DeployerAccount | null>(null);
   const [error, setError] = useState<string>('');
   const [copied, setCopied] = useState<'address' | 'key' | null>(null);
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     try {
       setError('');
-      const account = generateDeployerAccount(selectedProtocol);
+      const account = await generateDeployerAccount(selectedProtocol);
       setGeneratedAccount(account);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to generate account');
     }
   };
 
-  const handleDone = () => {
+  const handleDone = async () => {
     if (!generatedAccount) return;
-    addDeployerAccount(generatedAccount);
+
+    // If vault exists but is locked, show error
+    if (hasVaultPin() && !vaultUnlocked) {
+      setError('Vault is locked. Please unlock vault before adding accounts.');
+      return;
+    }
+
+    await addDeployerAccount(generatedAccount);
     onClose();
   };
 
   const handleCopy = (text: string, type: 'address' | 'key') => {
-    navigator.clipboard.writeText(text);
+    // Format private key based on protocol
+    let formattedText = text;
+    if (type === 'key' && generatedAccount) {
+      // EVM keys should have 0x prefix
+      if (generatedAccount.protocol === ProtocolType.Ethereum && !formattedText.startsWith('0x')) {
+        formattedText = '0x' + formattedText;
+      }
+    }
+
+    navigator.clipboard.writeText(formattedText);
     setCopied(type);
     setTimeout(() => setCopied(null), 2000);
   };
@@ -59,15 +75,9 @@ export function GenerateAccountModal({ onClose }: GenerateAccountModalProps) {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value={ProtocolType.Ethereum}>EVM (Ethereum)</option>
-                <option value={ProtocolType.CosmosNative} disabled>
-                  Cosmos (Coming Soon)
-                </option>
-                <option value={ProtocolType.Radix} disabled>
-                  Radix (Coming Soon)
-                </option>
-                <option value={ProtocolType.Aleo} disabled>
-                  Aleo (Coming Soon)
-                </option>
+                <option value={ProtocolType.CosmosNative}>Cosmos Native</option>
+                <option value={ProtocolType.Radix}>Radix (Beta)</option>
+                <option value={ProtocolType.Aleo}>Aleo (Beta)</option>
               </select>
             </div>
 
@@ -169,6 +179,12 @@ export function GenerateAccountModal({ onClose }: GenerateAccountModalProps) {
                     {copied === 'key' ? '✓ Copied' : 'Copy'}
                   </button>
                 </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  {generatedAccount.protocol === ProtocolType.Ethereum && 'Hex format (with 0x prefix)'}
+                  {generatedAccount.protocol === ProtocolType.CosmosNative && 'Hex format (32 bytes)'}
+                  {generatedAccount.protocol === ProtocolType.Radix && 'Hex format (Ed25519 key)'}
+                  {generatedAccount.protocol === ProtocolType.Aleo && 'Hex format (32 bytes)'}
+                </p>
               </div>
             </div>
 

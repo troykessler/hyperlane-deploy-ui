@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ProtocolType } from '@hyperlane-xyz/utils';
 import { useStore } from '../store';
 import { GenerateAccountModal } from './GenerateAccountModal';
 import { UnlockVaultModal } from './UnlockVaultModal';
@@ -24,6 +25,7 @@ export function DeployerAccountsPage() {
   const [showChangePin, setShowChangePin] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   const isVaultLocked = hasVaultPin() && !vaultUnlocked;
 
@@ -42,9 +44,43 @@ export function DeployerAccountsPage() {
     // If first time (no accounts and no PIN), show PIN setup first
     if (deployerAccounts.length === 0 && !hasVaultPin()) {
       setShowSetupPin(true);
+    } else if (hasVaultPin() && !vaultUnlocked) {
+      // If vault exists but is locked, unlock first
+      setShowUnlockModal(true);
     } else {
       setShowGenerateModal(true);
     }
+  };
+
+  const handleCopyPrivateKey = (account: DeployerAccount) => {
+    console.log('[handleCopyPrivateKey] Copying key for:', {
+      id: account.id,
+      protocol: account.protocol,
+      hasPrivateKey: !!account.privateKey,
+      privateKeyLength: account.privateKey?.length,
+      privateKeyPreview: account.privateKey?.substring(0, 10) + '...',
+    });
+
+    if (!account.privateKey) {
+      console.error('[handleCopyPrivateKey] Private key is empty!');
+      alert('Private key is empty. Please unlock the vault.');
+      return;
+    }
+
+    // Format private key based on protocol
+    let formattedKey = account.privateKey;
+
+    // EVM keys should have 0x prefix
+    if (account.protocol === ProtocolType.Ethereum && !formattedKey.startsWith('0x')) {
+      formattedKey = '0x' + formattedKey;
+    }
+
+    console.log('[handleCopyPrivateKey] Copying formatted key:', formattedKey.substring(0, 10) + '...');
+
+    // Copy to clipboard
+    navigator.clipboard.writeText(formattedKey);
+    setCopiedKey(account.id);
+    setTimeout(() => setCopiedKey(null), 2000);
   };
 
   const handlePinSetupComplete = () => {
@@ -188,18 +224,20 @@ export function DeployerAccountsPage() {
                         onClick={() => {
                           if (isVaultLocked) {
                             setShowUnlockModal(true);
-                          } else if (account.privateKey) {
-                            navigator.clipboard.writeText(account.privateKey);
+                          } else {
+                            handleCopyPrivateKey(account);
                           }
                         }}
                         className={`px-3 py-1 text-xs rounded transition-colors ${
                           isVaultLocked
                             ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                            : copiedKey === account.id
+                            ? 'bg-green-100 text-green-700'
                             : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         }`}
                         title={isVaultLocked ? 'Unlock vault to copy private key' : 'Copy private key'}
                       >
-                        {isVaultLocked ? '🔒 Copy Key' : 'Copy Key'}
+                        {isVaultLocked ? '🔒 Copy Key' : copiedKey === account.id ? '✓ Copied' : 'Copy Key'}
                       </button>
                       <button
                         onClick={() => handleDelete(account.id)}

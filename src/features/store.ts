@@ -280,6 +280,14 @@ export const useStore = create<AppState>()(
       deployerAccounts: [],
       addDeployerAccount: async (account) => {
         const state = get();
+        console.log('[addDeployerAccount] Adding account:', {
+          id: account.id,
+          protocol: account.protocol,
+          hasPrivateKey: !!account.privateKey,
+          privateKeyLength: account.privateKey?.length,
+          hasVault: !!state.vaultPinHash,
+          vaultUnlocked: !!state.vaultPin,
+        });
 
         // If vault exists, store account WITH private key (vault unlocked) and update encrypted vault
         if (state.vaultPinHash && state.vaultPin) {
@@ -290,6 +298,8 @@ export const useStore = create<AppState>()(
           const privateKeys = extractPrivateKeys(state.deployerAccounts);
           privateKeys[account.id] = account.privateKey;
 
+          console.log('[addDeployerAccount] Encrypting private keys:', Object.keys(privateKeys));
+
           // Re-encrypt private keys
           const encrypted = await encryptPrivateKeys(privateKeys, state.vaultPin);
 
@@ -297,11 +307,15 @@ export const useStore = create<AppState>()(
             deployerAccounts: newAccounts,
             encryptedVault: encrypted,
           }));
+
+          console.log('[addDeployerAccount] Account stored with vault. Total accounts:', newAccounts.length);
         } else {
           // No vault - store account with private key
           set(() => ({
             deployerAccounts: [...state.deployerAccounts, account],
           }));
+
+          console.log('[addDeployerAccount] Account stored without vault');
         }
       },
       deleteDeployerAccount: async (accountId) => {
@@ -360,8 +374,21 @@ export const useStore = create<AppState>()(
       unlockVault: (decryptedPrivateKeys, pin) => {
         const state = get();
 
+        console.log('[unlockVault] Decrypted private keys:', {
+          keyCount: Object.keys(decryptedPrivateKeys).length,
+          accountIds: Object.keys(decryptedPrivateKeys),
+          existingAccountIds: state.deployerAccounts.map(a => a.id),
+        });
+
         // Merge decrypted private keys into existing account metadata
         const accountsWithKeys = mergePrivateKeys(state.deployerAccounts, decryptedPrivateKeys);
+
+        console.log('[unlockVault] Accounts after merge:', accountsWithKeys.map(a => ({
+          id: a.id,
+          protocol: a.protocol,
+          hasKey: !!a.privateKey,
+          keyLength: a.privateKey?.length,
+        })));
 
         set(() => ({
           vaultUnlocked: true,
@@ -411,8 +438,11 @@ export const useStore = create<AppState>()(
         deployments: state.deployments,
         selectedChain: state.selectedChain,
         warpDeployments: state.warpDeployments,
-        // Always persist deployerAccounts (private keys cleared when vault locked)
-        deployerAccounts: state.deployerAccounts,
+        // Clear private keys from accounts if vault exists (they're stored encrypted)
+        // Keep private keys if no vault (plaintext mode)
+        deployerAccounts: state.vaultPinHash
+          ? state.deployerAccounts.map((acc) => ({ ...acc, privateKey: '' }))
+          : state.deployerAccounts,
         useDeployerAccounts: state.useDeployerAccounts,
         selectedDeployerAccountId: state.selectedDeployerAccountId,
         vaultPinHash: state.vaultPinHash,
