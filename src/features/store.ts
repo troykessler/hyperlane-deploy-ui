@@ -21,7 +21,12 @@ import { logger } from '../utils/logger';
 import { initializeAltVMProtocols } from '../utils/protocolInit';
 import { assembleChainMetadata } from './chains/metadata';
 import type { DeployerAccount } from './deployerAccounts/types';
-import { encryptAccounts } from './deployerAccounts/vaultEncryption';
+import {
+  encryptPrivateKeys,
+  extractPrivateKeys,
+  mergePrivateKeys,
+  clearPrivateKeys,
+} from './deployerAccounts/vaultEncryption';
 import type {
   WarpConfig,
   WarpConfigInputMethod,
@@ -114,9 +119,9 @@ export interface AppState {
   encryptedVault: string | null;
   vaultUnlocked: boolean;
   vaultPin: string | null; // Stored in memory only while unlocked (never persisted)
-  setVaultPin: (pinHash: string, encryptedAccounts: string, pin: string) => void;
-  unlockVault: (decryptedAccounts: DeployerAccount[], pin: string) => void;
-  lockVault: (encryptedAccounts: string) => void;
+  setVaultPin: (pinHash: string, encryptedVault: string, pin: string) => Promise<void>;
+  unlockVault: (decryptedPrivateKeys: Record<string, string>, pin: string) => void;
+  lockVault: () => Promise<void>;
   hasVaultPin: () => boolean;
 
   // Shared component state
@@ -275,18 +280,27 @@ export const useStore = create<AppState>()(
       deployerAccounts: [],
       addDeployerAccount: async (account) => {
         const state = get();
-        const newAccounts = [...state.deployerAccounts, account];
 
-        // If vault is unlocked, re-encrypt with new account
-        if (state.vaultUnlocked && state.vaultPin) {
-          const encrypted = await encryptAccounts(newAccounts, state.vaultPin);
+        // If vault exists, store account WITH private key (vault unlocked) and update encrypted vault
+        if (state.vaultPinHash && state.vaultPin) {
+          // When vault is unlocked, store account WITH private key in memory
+          const newAccounts = [...state.deployerAccounts, account];
+
+          // Extract all private keys and add the new one
+          const privateKeys = extractPrivateKeys(state.deployerAccounts);
+          privateKeys[account.id] = account.privateKey;
+
+          // Re-encrypt private keys
+          const encrypted = await encryptPrivateKeys(privateKeys, state.vaultPin);
+
           set(() => ({
             deployerAccounts: newAccounts,
             encryptedVault: encrypted,
           }));
         } else {
+          // No vault - store account with private key
           set(() => ({
-            deployerAccounts: newAccounts,
+            deployerAccounts: [...state.deployerAccounts, account],
           }));
         }
       },
@@ -294,20 +308,22 @@ export const useStore = create<AppState>()(
         const state = get();
         const newAccounts = state.deployerAccounts.filter((a) => a.id !== accountId);
 
-        // If vault is unlocked, re-encrypt without deleted account
-        if (state.vaultUnlocked && state.vaultPin) {
-          const encrypted = await encryptAccounts(newAccounts, state.vaultPin);
+        // If vault exists, also remove from encrypted vault
+        if (state.vaultPinHash && state.vaultPin) {
+          const privateKeys = extractPrivateKeys(state.deployerAccounts);
+          delete privateKeys[accountId]; // Remove deleted account's key
+
+          const encrypted = await encryptPrivateKeys(privateKeys, state.vaultPin);
+
           set(() => ({
             deployerAccounts: newAccounts,
             encryptedVault: encrypted,
-            // Clear selection if deleting selected account
             selectedDeployerAccountId:
               state.selectedDeployerAccountId === accountId ? null : state.selectedDeployerAccountId,
           }));
         } else {
           set(() => ({
             deployerAccounts: newAccounts,
-            // Clear selection if deleting selected account
             selectedDeployerAccountId:
               state.selectedDeployerAccountId === accountId ? null : state.selectedDeployerAccountId,
           }));
@@ -333,28 +349,40 @@ export const useStore = create<AppState>()(
       encryptedVault: null,
       vaultUnlocked: false,
       vaultPin: null,
-      setVaultPin: (pinHash, encryptedAccounts, pin) => {
+      setVaultPin: async (pinHash, encryptedVault, pin) => {
         set(() => ({
           vaultPinHash: pinHash,
-          encryptedVault: encryptedAccounts,
+          encryptedVault,
           vaultUnlocked: true,
           vaultPin: pin, // Store PIN in memory while unlocked
-          deployerAccounts: [], // Clear plaintext accounts
         }));
       },
-      unlockVault: (decryptedAccounts, pin) => {
+      unlockVault: (decryptedPrivateKeys, pin) => {
+        const state = get();
+
+        // Merge decrypted private keys into existing account metadata
+        const accountsWithKeys = mergePrivateKeys(state.deployerAccounts, decryptedPrivateKeys);
+
         set(() => ({
           vaultUnlocked: true,
           vaultPin: pin, // Store PIN in memory while unlocked
-          deployerAccounts: decryptedAccounts,
+          deployerAccounts: accountsWithKeys,
         }));
       },
-      lockVault: (encryptedAccounts) => {
+      lockVault: async () => {
+        const state = get();
+        // Extract and encrypt private keys before locking
+        const privateKeys = extractPrivateKeys(state.deployerAccounts);
+        const encrypted = state.vaultPin
+          ? await encryptPrivateKeys(privateKeys, state.vaultPin)
+          : state.encryptedVault;
+        const accountsWithoutKeys = clearPrivateKeys(state.deployerAccounts);
+
         set(() => ({
           vaultUnlocked: false,
           vaultPin: null, // Clear PIN from memory
-          encryptedVault: encryptedAccounts,
-          deployerAccounts: [], // Clear plaintext accounts from memory
+          encryptedVault: encrypted,
+          deployerAccounts: accountsWithoutKeys,
           selectedDeployerAccountId: null,
         }));
       },
@@ -383,8 +411,8 @@ export const useStore = create<AppState>()(
         deployments: state.deployments,
         selectedChain: state.selectedChain,
         warpDeployments: state.warpDeployments,
-        // Only persist plaintext accounts if no vault PIN is set
-        deployerAccounts: state.vaultPinHash ? [] : state.deployerAccounts,
+        // Always persist deployerAccounts (private keys cleared when vault locked)
+        deployerAccounts: state.deployerAccounts,
         useDeployerAccounts: state.useDeployerAccounts,
         selectedDeployerAccountId: state.selectedDeployerAccountId,
         vaultPinHash: state.vaultPinHash,
@@ -401,11 +429,11 @@ export const useStore = create<AppState>()(
             return;
           }
 
-          // Security: Ensure vault is locked and accounts cleared on rehydration
+          // Security: Ensure vault is locked on rehydration
           if (state.vaultPinHash) {
             state.vaultUnlocked = false;
             state.vaultPin = null; // Clear PIN from memory
-            state.deployerAccounts = [];
+            // deployerAccounts already persisted without private keys
             logger.debug('Vault locked on rehydration');
           }
 

@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../store';
 import { GenerateAccountModal } from './GenerateAccountModal';
-import { FundAccountModal } from './FundAccountModal';
 import { UnlockVaultModal } from './UnlockVaultModal';
 import { SetupPinModal } from './SetupPinModal';
 import { ChangePinModal } from './ChangePinModal';
@@ -25,8 +24,6 @@ export function DeployerAccountsPage() {
   const [showChangePin, setShowChangePin] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
-  const [accountToFund, setAccountToFund] = useState<DeployerAccount | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
 
   const isVaultLocked = hasVaultPin() && !vaultUnlocked;
 
@@ -39,10 +36,6 @@ export function DeployerAccountsPage() {
     if (confirm('Delete this account? This action cannot be undone.')) {
       deleteDeployerAccount(accountId);
     }
-  };
-
-  const handleFundSuccess = () => {
-    setRefreshKey((k) => k + 1); // Trigger balance refresh
   };
 
   const handleGenerateClick = () => {
@@ -120,22 +113,31 @@ export function DeployerAccountsPage() {
         </div>
       </div>
 
-      {/* Accounts Table */}
-      {isVaultLocked ? (
-        <div className="border border-gray-200 rounded-lg p-12 text-center">
-          <div className="text-4xl mb-4">🔒</div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Vault Locked</h3>
-          <p className="text-sm text-gray-600 mb-4">
-            Enter your PIN to access your deployer accounts
-          </p>
-          <button
-            onClick={() => setShowUnlockModal(true)}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
-          >
-            Unlock Vault
-          </button>
+      {/* Vault Locked Banner */}
+      {isVaultLocked && (
+        <div className="border border-amber-200 bg-amber-50 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🔒</span>
+              <div>
+                <h3 className="text-sm font-semibold text-amber-900">Vault Locked</h3>
+                <p className="text-xs text-amber-800">
+                  Unlock vault to export private keys or deploy contracts
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowUnlockModal(true)}
+              className="px-4 py-2 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700 transition-colors text-sm"
+            >
+              Unlock Vault
+            </button>
+          </div>
         </div>
-      ) : deployerAccounts.length === 0 ? (
+      )}
+
+      {/* Accounts Table */}
+      {deployerAccounts.length === 0 ? (
         <div className="border border-gray-200 rounded-lg p-12 text-center">
           <div className="text-4xl mb-4">🔑</div>
           <h3 className="text-lg font-semibold text-gray-900 mb-2">No Deployer Accounts</h3>
@@ -177,22 +179,27 @@ export function DeployerAccountsPage() {
                   <td className="px-4 py-3 text-right">
                     <div className="flex justify-end gap-2">
                       <button
-                        onClick={() => setAccountToFund(account)}
-                        className="px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
-                      >
-                        Fund
-                      </button>
-                      <button
                         onClick={() => navigator.clipboard.writeText(account.address)}
                         className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
                       >
                         Copy Address
                       </button>
                       <button
-                        onClick={() => navigator.clipboard.writeText(account.privateKey)}
-                        className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                        onClick={() => {
+                          if (isVaultLocked) {
+                            setShowUnlockModal(true);
+                          } else if (account.privateKey) {
+                            navigator.clipboard.writeText(account.privateKey);
+                          }
+                        }}
+                        className={`px-3 py-1 text-xs rounded transition-colors ${
+                          isVaultLocked
+                            ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                        title={isVaultLocked ? 'Unlock vault to copy private key' : 'Copy private key'}
                       >
-                        Copy Key
+                        {isVaultLocked ? '🔒 Copy Key' : 'Copy Key'}
                       </button>
                       <button
                         onClick={() => handleDelete(account.id)}
@@ -233,14 +240,6 @@ export function DeployerAccountsPage() {
 
       {showGenerateModal && (
         <GenerateAccountModal onClose={() => setShowGenerateModal(false)} />
-      )}
-
-      {accountToFund && (
-        <FundAccountModal
-          account={accountToFund}
-          onClose={() => setAccountToFund(null)}
-          onSuccess={handleFundSuccess}
-        />
       )}
 
       {/* Delete All Confirmation Modal */}

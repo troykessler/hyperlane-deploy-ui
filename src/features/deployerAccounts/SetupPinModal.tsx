@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { hashPin, encryptAccounts, isValidPin } from './vaultEncryption';
+import { hashPin, encryptPrivateKeys, extractPrivateKeys, isValidPin } from './vaultEncryption';
 import { useStore } from '../store';
 import type { DeployerAccount } from './types';
 
@@ -49,12 +49,13 @@ export function SetupPinModal({ firstAccount, onComplete, onCancel }: SetupPinMo
       // Hash PIN for storage
       const pinHash = await hashPin(pin);
 
-      // Encrypt accounts (may be empty if no account provided yet)
+      // Encrypt private keys only (may be empty if no account provided yet)
       const accounts = firstAccount ? [firstAccount] : [];
-      const encrypted = await encryptAccounts(accounts, pin);
+      const privateKeys = extractPrivateKeys(accounts);
+      const encrypted = await encryptPrivateKeys(privateKeys, pin);
 
       // Store in vault (pass PIN to keep in memory while unlocked)
-      setVaultPin(pinHash, encrypted, pin);
+      await setVaultPin(pinHash, encrypted, pin);
 
       onComplete();
     } catch (err) {

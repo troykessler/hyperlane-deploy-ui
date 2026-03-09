@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { hashPin, encryptAccounts, decryptAccounts, isValidPin } from './vaultEncryption';
+import { hashPin, encryptPrivateKeys, decryptPrivateKeys, extractPrivateKeys, isValidPin } from './vaultEncryption';
 import { useStore } from '../store';
 
 interface ChangePinModalProps {
@@ -64,7 +64,7 @@ export function ChangePinModal({ onComplete, onCancel }: ChangePinModalProps) {
       }
 
       try {
-        await decryptAccounts(encryptedVault, currentPin);
+        await decryptPrivateKeys(encryptedVault, currentPin);
       } catch {
         setError('Incorrect current PIN');
         return;
@@ -73,11 +73,12 @@ export function ChangePinModal({ onComplete, onCancel }: ChangePinModalProps) {
       // Hash new PIN
       const pinHash = await hashPin(newPin);
 
-      // Re-encrypt accounts with new PIN
-      const encrypted = await encryptAccounts(deployerAccounts, newPin);
+      // Re-encrypt private keys with new PIN
+      const privateKeys = extractPrivateKeys(deployerAccounts);
+      const encrypted = await encryptPrivateKeys(privateKeys, newPin);
 
       // Update vault
-      setVaultPin(pinHash, encrypted);
+      await setVaultPin(pinHash, encrypted, newPin);
 
       onComplete();
     } catch (err) {

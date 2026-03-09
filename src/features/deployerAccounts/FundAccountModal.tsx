@@ -8,7 +8,7 @@ import { useWallet } from '../wallet/hooks/useWallet';
 interface FundAccountModalProps {
   account: DeployerAccount;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess?: () => void;
 }
 
 /**
@@ -80,7 +80,7 @@ export function FundAccountModal({ account, onClose, onSuccess }: FundAccountMod
 
       setTxHash(hash);
       setTimeout(() => {
-        onSuccess();
+        onSuccess?.();
         onClose();
       }, 2000);
     } catch (err) {

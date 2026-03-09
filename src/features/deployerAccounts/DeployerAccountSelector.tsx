@@ -94,10 +94,10 @@ export function DeployerAccountSelector({ onVaultLocked }: DeployerAccountSelect
         </div>
       </div>
 
-      {useDeployerAccounts && !isVaultLocked && (
+      {useDeployerAccounts && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
-            Select Deployer Account
+            Select Deployer Account {isVaultLocked && <span className="text-xs text-amber-600">(locked)</span>}
           </label>
           <select
             value={selectedDeployerAccountId || ''}
@@ -112,14 +112,11 @@ export function DeployerAccountSelector({ onVaultLocked }: DeployerAccountSelect
               </option>
             ))}
           </select>
-        </div>
-      )}
-
-      {useDeployerAccounts && isVaultLocked && (
-        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-          <p className="text-xs text-amber-800">
-            ⚠️ Vault is locked. You'll be prompted to enter your PIN before deployment starts.
-          </p>
+          {isVaultLocked && (
+            <p className="mt-2 text-xs text-amber-600">
+              ⚠️ Vault is locked. You'll be prompted to enter your PIN before deployment starts.
+            </p>
+          )}
         </div>
       )}
     </div>

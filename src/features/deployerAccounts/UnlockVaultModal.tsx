@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { hashPin, decryptAccounts } from './vaultEncryption';
+import { hashPin, decryptPrivateKeys, migrateVaultFormat } from './vaultEncryption';
 import { useStore } from '../store';
 
 interface UnlockVaultModalProps {
@@ -51,15 +51,40 @@ export function UnlockVaultModal({ onCancel, onSuccess }: UnlockVaultModalProps 
         return;
       }
 
-      // Decrypt accounts
+      // Decrypt private keys
       if (!encryptedVault) {
         throw new Error('No encrypted vault found');
       }
 
-      const decrypted = await decryptAccounts(encryptedVault, pinValue);
+      let decryptedPrivateKeys: Record<string, string>;
+      let newEncryptedVault = encryptedVault;
 
-      // Unlock vault (pass PIN to keep in memory for re-encryption)
-      unlockVault(decrypted, pinValue);
+      try {
+        // Try new format first
+        decryptedPrivateKeys = await decryptPrivateKeys(encryptedVault, pinValue);
+      } catch (firstError) {
+        // If new format fails, try migrating from old format
+        try {
+          const migrated = await migrateVaultFormat(encryptedVault, pinValue);
+          decryptedPrivateKeys = migrated.privateKeys;
+          newEncryptedVault = migrated.newEncrypted;
+        } catch (migrationError) {
+          // Both formats failed - incorrect PIN
+          throw firstError;
+        }
+      }
+
+      // Unlock vault (pass decrypted private keys and PIN)
+      unlockVault(decryptedPrivateKeys, pinValue);
+
+      // If vault was migrated, update the encrypted vault in store
+      if (newEncryptedVault !== encryptedVault) {
+        useStore.getState().setVaultPin(
+          useStore.getState().vaultPinHash!,
+          newEncryptedVault,
+          pinValue
+        );
+      }
 
       // Call success callback to close modal
       if (onSuccess) {

@@ -135,7 +135,9 @@ const Home: NextPage = () => {
       return undefined;
     }
     const account = state.deployerAccounts.find((a) => a.id === state.selectedDeployerAccountId);
-    return account?.privateKey;
+    const privateKey = account?.privateKey;
+    // Return undefined if private key is empty (vault locked)
+    return privateKey && privateKey.length > 0 ? privateKey : undefined;
   };
 
   // Helper: Check if vault needs unlocking before action
