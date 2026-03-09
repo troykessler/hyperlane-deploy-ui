@@ -1,5 +1,7 @@
 import { ChainName } from '@hyperlane-xyz/sdk';
+import { ProtocolType } from '@hyperlane-xyz/utils';
 import { useAccountForChain } from '@hyperlane-xyz/widgets';
+import { fromBech32, toBech32 } from '@cosmjs/encoding';
 import { useMultiProvider } from '../chains/hooks';
 import { useWallet } from '../wallet/hooks/useWallet';
 import { useStore } from '../store';
@@ -8,6 +10,19 @@ interface CoreBaseFieldsProps {
   owner: string;
   onChange: (value: string) => void;
   chainName?: ChainName;
+}
+
+/**
+ * Convert a Cosmos address from one bech32 prefix to another
+ */
+function convertCosmosAddress(address: string, newPrefix: string): string {
+  try {
+    const { data } = fromBech32(address);
+    return toBech32(newPrefix, data);
+  } catch (error) {
+    console.error('Failed to convert Cosmos address:', error);
+    return address; // Return original if conversion fails
+  }
 }
 
 export function CoreBaseFields({ owner, onChange, chainName }: CoreBaseFieldsProps) {
@@ -23,21 +38,27 @@ export function CoreBaseFields({ owner, onChange, chainName }: CoreBaseFieldsPro
   const wallet = useWallet(chainName, protocol);
 
   const handleUseWalletAddress = () => {
+    let address: string | undefined;
+
     // If using deployer accounts, use selected deployer account address
     if (useDeployerAccounts && selectedDeployerAccountId) {
       const deployerAccount = deployerAccounts.find((a) => a.id === selectedDeployerAccountId);
       if (deployerAccount) {
-        onChange(deployerAccount.address);
-        return;
+        address = deployerAccount.address;
       }
+    } else {
+      // Otherwise use connected wallet address
+      address = wallet.address || account?.addresses?.[0]?.address;
     }
 
-    // Otherwise use connected wallet address
-    const address = wallet.address || account?.addresses?.[0]?.address;
+    if (!address) return;
 
-    if (address) {
-      onChange(address);
+    // For Cosmos chains, convert address to use chain-specific prefix if needed
+    if (protocol === ProtocolType.CosmosNative && chainMetadata?.bech32Prefix) {
+      address = convertCosmosAddress(address, chainMetadata.bech32Prefix);
     }
+
+    onChange(address);
   };
 
   // Determine if we have a wallet connected or deployer account selected

@@ -39,8 +39,8 @@ export async function generateCosmosAccount(): Promise<DeployerAccount> {
   const privkey = new Uint8Array(32);
   crypto.getRandomValues(privkey);
 
-  // Create wallet from private key
-  const wallet = await DirectSecp256k1Wallet.fromKey(privkey, 'neutron');
+  // Create wallet from private key with cosmos prefix
+  const wallet = await DirectSecp256k1Wallet.fromKey(privkey, 'cosmos');
 
   // Get accounts (address)
   const accounts = await wallet.getAccounts();

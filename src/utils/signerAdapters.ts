@@ -58,7 +58,7 @@ export async function createCosmosSignerFromPrivateKey(
   );
 
   // Create wallet from private key with appropriate prefix
-  const prefix = chainMetadata.bech32Prefix || 'neutron';
+  const prefix = chainMetadata.bech32Prefix || 'cosmos';
   const offlineSigner = await DirectSecp256k1Wallet.fromKey(privkeyBytes, prefix);
 
   // Get RPC URLs
