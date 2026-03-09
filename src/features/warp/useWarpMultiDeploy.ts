@@ -1,8 +1,16 @@
 import { useState, useCallback } from 'react';
 import { ChainName, EvmWarpModule } from '@hyperlane-xyz/sdk';
 import { AltVMDeployer } from '@hyperlane-xyz/deploy-sdk';
+import { ProtocolType } from '@hyperlane-xyz/utils';
 import { useMultiProvider } from '../chains/hooks';
-import { createAltVMSigner, createEvmSigner } from '../../utils/signerAdapters';
+import {
+  createAltVMSigner,
+  createEvmSigner,
+  createEvmSignerFromPrivateKey,
+  createCosmosSignerFromPrivateKey,
+  createRadixSignerFromPrivateKey,
+  createAleoSignerFromPrivateKey,
+} from '../../utils/signerAdapters';
 import { logger } from '../../utils/logger';
 import type { WarpConfig, MultiChainDeployStatuses } from './types';
 import { validateWarpConfig } from './validation';
@@ -21,7 +29,8 @@ export function useWarpMultiDeploy() {
   const deploy = useCallback(
     async (
       configsMap: Record<ChainName, WarpConfig>,
-      walletsMap: Record<ChainName, any>
+      walletsMap: Record<ChainName, any>,
+      deployerPrivateKeys?: Record<ChainName, string | undefined>
     ): Promise<Record<ChainName, string> | null> => {
       const chains = Object.keys(configsMap) as ChainName[];
 
@@ -62,7 +71,29 @@ export function useWarpMultiDeploy() {
               evmChains.push(chain);
             } else {
               altVMChains.push(chain);
-              signersMap[chain] = await createAltVMSigner(chainMetadata, walletsMap[chain]);
+              // Create signer from deployer private key or wallet
+              const chainPrivateKey = deployerPrivateKeys?.[chain];
+              if (chainPrivateKey) {
+                switch (chainMetadata.protocol) {
+                  case ProtocolType.CosmosNative:
+                    signersMap[chain] = await createCosmosSignerFromPrivateKey(chainPrivateKey, chainMetadata);
+                    break;
+                  case ProtocolType.Radix:
+                    signersMap[chain] = await createRadixSignerFromPrivateKey(chainPrivateKey, chainMetadata);
+                    break;
+                  case ProtocolType.Aleo:
+                    signersMap[chain] = await createAleoSignerFromPrivateKey(chainPrivateKey, chainMetadata);
+                    break;
+                  default:
+                    throw new Error(`Unsupported protocol for deployer account: ${chainMetadata.protocol}`);
+                }
+              } else {
+                const wallet = walletsMap[chain];
+                if (!wallet) {
+                  throw new Error(`No signer available for ${chain}. Either provide deployer private key or connect wallet.`);
+                }
+                signersMap[chain] = await createAltVMSigner(chainMetadata, wallet);
+              }
             }
           } catch (error) {
             logger.error(`Failed to prepare for ${chain}`, error);
@@ -79,12 +110,20 @@ export function useWarpMultiDeploy() {
             setChainStatuses((prev) => ({ ...prev, [chain]: 'deploying' }));
 
             try {
-              // Set signer for this chain
-              const walletClient = walletsMap[chain];
-              if (walletClient) {
-                const chainMetadata = multiProvider.tryGetChainMetadata(chain);
-                if (chainMetadata) {
-                  const signer = await createEvmSigner(walletClient, chainMetadata);
+              // Set signer for this chain from deployer private key or wallet
+              const chainMetadata = multiProvider.tryGetChainMetadata(chain);
+              if (chainMetadata) {
+                let signer;
+                const chainPrivateKey = deployerPrivateKeys?.[chain];
+                if (chainPrivateKey) {
+                  signer = await createEvmSignerFromPrivateKey(chainPrivateKey, chainMetadata);
+                } else {
+                  const walletClient = walletsMap[chain];
+                  if (walletClient) {
+                    signer = await createEvmSigner(walletClient, chainMetadata);
+                  }
+                }
+                if (signer) {
                   evmMultiProvider.setSigner(chain, signer);
                 }
               }
@@ -175,13 +214,21 @@ export function useWarpMultiDeploy() {
             }
           }
 
-          // Set EVM signers
+          // Set EVM signers from deployer private key or wallet
           for (const chain of evmChains) {
-            const walletClient = walletsMap[chain];
-            if (walletClient) {
-              const chainMetadata = multiProvider.tryGetChainMetadata(chain);
-              if (chainMetadata) {
-                const signer = await createEvmSigner(walletClient, chainMetadata);
+            const chainMetadata = multiProvider.tryGetChainMetadata(chain);
+            if (chainMetadata) {
+              let signer;
+              const chainPrivateKey = deployerPrivateKeys?.[chain];
+              if (chainPrivateKey) {
+                signer = await createEvmSignerFromPrivateKey(chainPrivateKey, chainMetadata);
+              } else {
+                const walletClient = walletsMap[chain];
+                if (walletClient) {
+                  signer = await createEvmSigner(walletClient, chainMetadata);
+                }
+              }
+              if (signer) {
                 enrollmentMultiProvider.setSigner(chain, signer);
               }
             }

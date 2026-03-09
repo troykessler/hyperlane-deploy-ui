@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { ChainName } from '@hyperlane-xyz/sdk';
 import { WarpTokenTypeSelector } from './WarpTokenTypeSelector';
 import { WarpBaseFields } from './WarpBaseFields';
@@ -17,9 +17,18 @@ interface WarpFormBuilderProps {
   initialConfig?: WarpConfig | null;
   onChange: (config: WarpConfig | null) => void;
   mailboxAddress?: string;
+  useDeployerAccount?: boolean;
+  deployerAccountId?: string | null;
 }
 
-export function WarpFormBuilder({ chainName, initialConfig, onChange, mailboxAddress }: WarpFormBuilderProps) {
+const WarpFormBuilderComponent = ({
+  chainName,
+  initialConfig,
+  onChange,
+  mailboxAddress,
+  useDeployerAccount,
+  deployerAccountId,
+}: WarpFormBuilderProps) => {
   const [tokenType, setTokenType] = useState<WarpTokenType>(
     initialConfig?.type || 'collateral'
   );
@@ -157,6 +166,8 @@ export function WarpFormBuilder({ chainName, initialConfig, onChange, mailboxAdd
           mailbox={mailbox}
           onChange={handleBaseFieldChange}
           chainName={chainName}
+          useDeployerAccount={useDeployerAccount}
+          deployerAccountId={deployerAccountId}
         />
       </div>
 
@@ -225,4 +236,7 @@ export function WarpFormBuilder({ chainName, initialConfig, onChange, mailboxAdd
       </div>
     </div>
   );
-}
+};
+
+// Memoize to prevent unnecessary re-renders that can interfere with form interactions
+export const WarpFormBuilder = memo(WarpFormBuilderComponent);

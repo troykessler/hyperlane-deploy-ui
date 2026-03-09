@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ChainName } from '@hyperlane-xyz/sdk';
 import { useWalletClient } from 'wagmi';
 import { useMultiProvider } from '../chains/hooks';
@@ -10,6 +10,7 @@ import { useCosmosWallet } from '../wallet/hooks/useCosmosWallet';
 import { useRadixWallet } from '../wallet/hooks/useRadixWallet';
 import { useAleoWallet } from '../wallet/hooks/useAleoWallet';
 import { ChainSelectField } from '../chains/ChainSelectField';
+import { UnlockVaultModal } from '../deployerAccounts/UnlockVaultModal';
 import { useStore } from '../store';
 import { logger } from '../../utils/logger';
 import { isEvmChain } from '../../utils/protocolUtils';
@@ -19,9 +20,20 @@ export function WarpMultiChainWizard() {
   const [step, setStep] = useState<'select' | 'configure' | 'deploy'>('select');
   const [selectedChains, setSelectedChains] = useState<ChainName[]>([]);
   const [mailboxAddresses, setMailboxAddresses] = useState<Record<ChainName, string>>({});
+  const [chainDeployerSources, setChainDeployerSources] = useState<Record<ChainName, boolean>>({});
+  const [chainDeployerAccounts, setChainDeployerAccounts] = useState<Record<ChainName, string | null>>({});
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [pendingDeployAfterUnlock, setPendingDeployAfterUnlock] = useState(false);
   const multiProvider = useMultiProvider();
 
-  const { warpMultiChainConfigs, setWarpChainConfig, addWarpDeployment } = useStore();
+  const {
+    warpMultiChainConfigs,
+    setWarpChainConfig,
+    addWarpDeployment,
+    deployerAccounts,
+    vaultUnlocked,
+    hasVaultPin,
+  } = useStore();
   const { deploy, chainStatuses, deployedAddresses, reset, isDeploying } = useWarpMultiDeploy();
 
   // Get all deployable chains
@@ -43,6 +55,39 @@ export function WarpMultiChainWizard() {
   const cosmosWallet = useCosmosWallet(cosmosChain);
   const radixWallet = useRadixWallet();
   const aleoWallet = useAleoWallet();
+
+  // Watch for vault unlock and trigger deployment if pending
+  useEffect(() => {
+    console.log('[useEffect] Vault unlock check:', {
+      vaultUnlocked,
+      pendingDeployAfterUnlock,
+      deployerAccountsCount: deployerAccounts.length,
+      selectedChainsCount: selectedChains.length,
+    });
+
+    if (vaultUnlocked && pendingDeployAfterUnlock) {
+      // Verify all required deployer keys are actually available before proceeding
+      const allKeysAvailable = selectedChains.every((chain) => {
+        const useDeployer = chainDeployerSources[chain];
+        if (!useDeployer) return true; // Not using deployer for this chain
+
+        const privateKey = getDeployerPrivateKeyForChain(chain);
+        console.log(`[useEffect] Chain ${chain} key check:`, { useDeployer, hasKey: !!privateKey });
+        return !!privateKey; // Must have valid private key
+      });
+
+      console.log('[useEffect] All keys available?', allKeysAvailable);
+
+      if (allKeysAvailable) {
+        console.log('[useEffect] Triggering deployment with skipVaultCheck=true');
+        setPendingDeployAfterUnlock(false);
+        handleDeploy(true);
+      } else {
+        console.warn('[useEffect] Not all keys available yet, waiting...');
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vaultUnlocked, pendingDeployAfterUnlock, deployerAccounts]);
 
   const handleChainChange = (index: number, chain: ChainName) => {
     setSelectedChains((prev) => {
@@ -88,7 +133,43 @@ export function WarpMultiChainWizard() {
     setMailboxAddresses((prev) => ({ ...prev, [chain]: mailbox }));
   };
 
-  const handleDeploy = async () => {
+  const handleDeployerSourceChange = (chain: ChainName, useDeployer: boolean) => {
+    setChainDeployerSources((prev) => ({ ...prev, [chain]: useDeployer }));
+  };
+
+  const handleDeployerAccountChange = (chain: ChainName, accountId: string | null) => {
+    setChainDeployerAccounts((prev) => ({ ...prev, [chain]: accountId }));
+  };
+
+  // Helper: Get deployer account private key for a specific chain
+  const getDeployerPrivateKeyForChain = (chain: ChainName): string | undefined => {
+    const useDeployer = chainDeployerSources[chain];
+    const accountId = chainDeployerAccounts[chain];
+
+    console.log(`[getDeployerPrivateKeyForChain] ${chain}:`, {
+      useDeployer,
+      accountId,
+      deployerAccountsCount: deployerAccounts.length,
+      deployerAccountsWithKeys: deployerAccounts.filter(a => a.privateKey && a.privateKey.length > 0).length,
+    });
+
+    if (!useDeployer || !accountId) {
+      return undefined;
+    }
+
+    const account = deployerAccounts.find((a) => a.id === accountId);
+    console.log(`[getDeployerPrivateKeyForChain] Found account for ${chain}:`, {
+      found: !!account,
+      hasKey: !!account?.privateKey,
+      keyLength: account?.privateKey?.length,
+    });
+
+    const privateKey = account?.privateKey;
+    // Return undefined if private key is empty (vault locked)
+    return privateKey && privateKey.length > 0 ? privateKey : undefined;
+  };
+
+  const handleDeploy = async (skipVaultCheck = false) => {
     try {
       // Validate all configs
       const configsMap: Record<ChainName, WarpConfig> = {};
@@ -102,43 +183,94 @@ export function WarpMultiChainWizard() {
         }
         configsMap[chain] = config;
 
-        // Get wallet for chain based on protocol
+        // Get wallet for chain based on protocol (only if not using deployer account)
         const chainMetadata = multiProvider.tryGetChainMetadata(chain);
         if (!chainMetadata) {
           logger.error(`No metadata found for chain ${chain}`, new Error('Metadata missing'));
           return;
         }
 
-        // Get wallet for chain based on protocol
-        if (isEvmChain(chainMetadata)) {
-          // EVM chains (ethereum, arbitrum, optimism, etc.)
-          if (!evmWalletClient) {
-            logger.error(`No EVM wallet connected for chain ${chain}`, new Error('Wallet not connected'));
-            return;
-          }
-          walletsMap[chain] = evmWalletClient;
-        } else {
-          // AltVM chains
-          switch (chainMetadata.protocol) {
-            case 'cosmosnative':
-              walletsMap[chain] = await cosmosWallet.getOfflineSigner();
-              break;
-            case 'radix':
-              walletsMap[chain] = radixWallet.rdt;
-              break;
-            case 'aleo':
-              walletsMap[chain] = aleoWallet.wallet;
-              break;
-            default:
-              logger.error(`Unsupported protocol for chain ${chain}: ${chainMetadata.protocol}`, new Error('Unsupported protocol'));
+        // Check if using deployer account for this chain
+        const useDeployer = chainDeployerSources[chain];
+
+        // Only fetch wallet if NOT using deployer account
+        if (!useDeployer) {
+          if (isEvmChain(chainMetadata)) {
+            // EVM chains (ethereum, arbitrum, optimism, etc.)
+            if (!evmWalletClient) {
+              logger.error(`No EVM wallet connected for chain ${chain}`, new Error('Wallet not connected'));
               return;
+            }
+            walletsMap[chain] = evmWalletClient;
+          } else {
+            // AltVM chains
+            switch (chainMetadata.protocol) {
+              case 'cosmosnative':
+                walletsMap[chain] = await cosmosWallet.getOfflineSigner();
+                break;
+              case 'radix':
+                walletsMap[chain] = radixWallet.rdt;
+                break;
+              case 'aleo':
+                walletsMap[chain] = aleoWallet.wallet;
+                break;
+              default:
+                logger.error(`Unsupported protocol for chain ${chain}: ${chainMetadata.protocol}`, new Error('Unsupported protocol'));
+                return;
+            }
           }
         }
       }
 
-      logger.debug('Starting multi-chain deployment', { chains: selectedChains });
+      // Build per-chain deployer private keys map and validate
+      const deployerPrivateKeys: Record<ChainName, string | undefined> = {};
+      console.log('[handleDeploy] Building deployer keys map, skipVaultCheck:', skipVaultCheck);
+      for (const chain of selectedChains) {
+        const useDeployer = chainDeployerSources[chain];
+        const privateKey = getDeployerPrivateKeyForChain(chain);
 
-      const addresses = await deploy(configsMap, walletsMap);
+        console.log(`[handleDeploy] Chain ${chain}:`, { useDeployer, hasKey: !!privateKey });
+
+        // Validate: if deployer source selected, must have valid key
+        if (useDeployer && !privateKey) {
+          const accountId = chainDeployerAccounts[chain];
+          if (!accountId) {
+            logger.error(`Deployer account selected for ${chain} but no account chosen`, new Error('No account selected'));
+            alert(`Please select a deployer account for ${chain}`);
+            return;
+          }
+
+          // Check if vault exists and is locked (only show modal if not already showing and not skipping check)
+          const isVaultLocked = hasVaultPin() && !vaultUnlocked;
+          if (isVaultLocked && !skipVaultCheck && !showUnlockModal) {
+            // Vault is locked - show unlock modal and mark deployment as pending
+            logger.debug(`Deployer account selected for ${chain} but vault locked - showing unlock modal`);
+            setPendingDeployAfterUnlock(true);
+            setShowUnlockModal(true);
+            return;
+          }
+
+          // If we're skipping the check or vault is unlocked but key still not available, continue anyway
+          // The key should be available after the vault state updates
+        }
+
+        // Validate: if wallet source selected, must have wallet
+        if (!useDeployer && !walletsMap[chain]) {
+          logger.error(`Wallet source selected for ${chain} but wallet not connected`, new Error('Wallet not connected'));
+          alert(`Please connect your wallet for ${chain} before deploying.`);
+          return;
+        }
+
+        deployerPrivateKeys[chain] = privateKey;
+      }
+
+      logger.debug('Starting multi-chain deployment', {
+        chains: selectedChains,
+        chainDeployerSources,
+        deployerKeysCount: Object.values(deployerPrivateKeys).filter(k => k).length,
+      });
+
+      const addresses = await deploy(configsMap, walletsMap, deployerPrivateKeys);
 
       if (addresses) {
         // Save deployments to store with enrolled remote routers
@@ -189,6 +321,20 @@ export function WarpMultiChainWizard() {
 
   return (
     <div className="space-y-6">
+      {/* Vault Unlock Modal */}
+      {showUnlockModal && (
+        <UnlockVaultModal
+          onCancel={() => {
+            setPendingDeployAfterUnlock(false);
+            setShowUnlockModal(false);
+          }}
+          onSuccess={() => {
+            setShowUnlockModal(false);
+            // Deployment will continue automatically via useEffect when vault unlocks
+          }}
+        />
+      )}
+
       {/* Progress Steps */}
       <div className="flex items-center gap-4">
         <div
@@ -278,14 +424,19 @@ export function WarpMultiChainWizard() {
 
       {/* Step 2: Configure Chains */}
       {step === 'configure' && (
-        <div className="space-y-4">
+        <div className="space-y-6">
           <h3 className="text-lg font-semibold text-gray-900">Configure Warp Routes</h3>
+
           <WarpChainConfigList
             selectedChains={selectedChains}
             configs={warpMultiChainConfigs}
             onConfigChange={handleConfigChange}
             mailboxAddresses={mailboxAddresses}
             onMailboxSelect={handleMailboxSelect}
+            chainDeployerSources={chainDeployerSources}
+            chainDeployerAccounts={chainDeployerAccounts}
+            onDeployerSourceChange={handleDeployerSourceChange}
+            onDeployerAccountChange={handleDeployerAccountChange}
           />
         </div>
       )}
@@ -317,7 +468,7 @@ export function WarpMultiChainWizard() {
 
           {!isDeploying && Object.keys(chainStatuses).length === 0 && (
             <button
-              onClick={handleDeploy}
+              onClick={() => handleDeploy()}
               disabled={!allConfigured}
               className="w-full px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
             >

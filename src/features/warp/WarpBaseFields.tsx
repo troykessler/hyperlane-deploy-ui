@@ -1,6 +1,8 @@
 import { useEffect } from 'react';
 import { ChainName } from '@hyperlane-xyz/sdk';
+import { ProtocolType } from '@hyperlane-xyz/utils';
 import { useAccountForChain } from '@hyperlane-xyz/widgets';
+import { fromBech32, toBech32 } from '@cosmjs/encoding';
 import { useMultiProvider } from '../chains/hooks';
 import { useWallet } from '../wallet/hooks/useWallet';
 import { useStore } from '../store';
@@ -10,11 +12,34 @@ interface WarpBaseFieldsProps {
   mailbox: string;
   onChange: (field: 'owner' | 'mailbox', value: string) => void;
   chainName?: ChainName;
+  useDeployerAccount?: boolean;
+  deployerAccountId?: string | null;
 }
 
-export function WarpBaseFields({ owner, mailbox, onChange, chainName }: WarpBaseFieldsProps) {
+/**
+ * Convert a Cosmos address from one bech32 prefix to another
+ */
+function convertCosmosAddress(address: string, newPrefix: string): string {
+  try {
+    const { data } = fromBech32(address);
+    return toBech32(newPrefix, data);
+  } catch (error) {
+    console.error('Failed to convert Cosmos address:', error);
+    return address; // Return original if conversion fails
+  }
+}
+
+export function WarpBaseFields({
+  owner,
+  mailbox,
+  onChange,
+  chainName,
+  useDeployerAccount,
+  deployerAccountId,
+}: WarpBaseFieldsProps) {
   const multiProvider = useMultiProvider();
   const account = useAccountForChain(multiProvider, chainName || '');
+  const { deployerAccounts } = useStore();
   const deployments = useStore((s) => s.deployments);
 
   // Get chain metadata to determine protocol
@@ -49,16 +74,34 @@ export function WarpBaseFields({ owner, mailbox, onChange, chainName }: WarpBase
   }, [chainName, mailbox, deployments, multiProvider, onChange]);
 
   const handleUseWalletAddress = () => {
-    // Prefer unified wallet address, fallback to account for EVM
-    const address = wallet.address || account?.addresses?.[0]?.address;
+    let address: string | undefined;
 
-    if (address) {
-      onChange('owner', address);
+    // If using deployer account for this chain, use deployer account address
+    if (useDeployerAccount && deployerAccountId) {
+      const deployerAccount = deployerAccounts.find((a) => a.id === deployerAccountId);
+      if (deployerAccount) {
+        address = deployerAccount.address;
+      }
+    } else {
+      // Otherwise use connected wallet address
+      address = wallet.address || account?.addresses?.[0]?.address;
     }
+
+    if (!address) return;
+
+    // For Cosmos chains, convert address to use chain-specific prefix if needed
+    if (protocol === ProtocolType.CosmosNative && chainMetadata?.bech32Prefix) {
+      address = convertCosmosAddress(address, chainMetadata.bech32Prefix);
+    }
+
+    onChange('owner', address);
   };
 
-  // Determine if we have a wallet connected
+  // Determine if we have a wallet connected or deployer account selected
   const hasWalletAddress = () => {
+    if (useDeployerAccount && deployerAccountId) {
+      return true;
+    }
     return wallet.isConnected || !!account?.addresses?.[0]?.address;
   };
 

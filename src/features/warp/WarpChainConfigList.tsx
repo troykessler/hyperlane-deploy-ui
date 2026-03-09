@@ -2,6 +2,7 @@ import { useCallback } from 'react';
 import { ChainName } from '@hyperlane-xyz/sdk';
 import { WarpFormBuilder } from './WarpFormBuilder';
 import { CoreConfigSelector } from '../../components/deploy/CoreConfigSelector';
+import { ChainDeployerAccountSelector } from '../deployerAccounts/ChainDeployerAccountSelector';
 import type { WarpConfig } from './types';
 
 interface WarpChainConfigListProps {
@@ -10,6 +11,10 @@ interface WarpChainConfigListProps {
   onConfigChange: (chain: ChainName, config: WarpConfig | null) => void;
   mailboxAddresses: Record<ChainName, string>;
   onMailboxSelect: (chain: ChainName, mailbox: string) => void;
+  chainDeployerSources: Record<ChainName, boolean>;
+  chainDeployerAccounts: Record<ChainName, string | null>;
+  onDeployerSourceChange: (chain: ChainName, useDeployer: boolean) => void;
+  onDeployerAccountChange: (chain: ChainName, accountId: string | null) => void;
 }
 
 export function WarpChainConfigList({
@@ -18,6 +23,10 @@ export function WarpChainConfigList({
   onConfigChange,
   mailboxAddresses,
   onMailboxSelect,
+  chainDeployerSources,
+  chainDeployerAccounts,
+  onDeployerSourceChange,
+  onDeployerAccountChange,
 }: WarpChainConfigListProps) {
   if (selectedChains.length === 0) {
     return (
@@ -86,6 +95,19 @@ export function WarpChainConfigList({
                 />
               </div>
 
+              {/* Deployment Source Selection */}
+              {hasMailbox && (
+                <div>
+                  <ChainDeployerAccountSelector
+                    chainName={chain}
+                    useDeployerAccount={chainDeployerSources[chain] || false}
+                    selectedAccountId={chainDeployerAccounts[chain] || null}
+                    onSourceChange={(useDeployer) => onDeployerSourceChange(chain, useDeployer)}
+                    onAccountChange={(accountId) => onDeployerAccountChange(chain, accountId)}
+                  />
+                </div>
+              )}
+
               {/* Warp Route Configuration */}
               {hasMailbox && (
                 <div>
@@ -97,6 +119,8 @@ export function WarpChainConfigList({
                     initialConfig={config}
                     onChange={(newConfig) => onConfigChange(chain, newConfig)}
                     mailboxAddress={mailboxAddress}
+                    useDeployerAccount={chainDeployerSources[chain]}
+                    deployerAccountId={chainDeployerAccounts[chain]}
                   />
                 </div>
               )}

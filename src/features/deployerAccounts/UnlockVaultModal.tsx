@@ -87,8 +87,9 @@ export function UnlockVaultModal({ onCancel, onSuccess }: UnlockVaultModalProps 
       }
 
       // Call success callback to close modal
+      // Use setTimeout to ensure Zustand state has propagated to React before calling callback
       if (onSuccess) {
-        onSuccess();
+        setTimeout(() => onSuccess(), 0);
       }
     } catch (err) {
       setAttempts((a) => a + 1);
