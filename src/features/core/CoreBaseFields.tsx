@@ -2,6 +2,7 @@ import { ChainName } from '@hyperlane-xyz/sdk';
 import { useAccountForChain } from '@hyperlane-xyz/widgets';
 import { useMultiProvider } from '../chains/hooks';
 import { useWallet } from '../wallet/hooks/useWallet';
+import { useStore } from '../store';
 
 interface CoreBaseFieldsProps {
   owner: string;
@@ -12,6 +13,7 @@ interface CoreBaseFieldsProps {
 export function CoreBaseFields({ owner, onChange, chainName }: CoreBaseFieldsProps) {
   const multiProvider = useMultiProvider();
   const account = useAccountForChain(multiProvider, chainName || '');
+  const { useDeployerAccounts, selectedDeployerAccountId, deployerAccounts } = useStore();
 
   // Get chain metadata to determine protocol
   const chainMetadata = chainName ? multiProvider.tryGetChainMetadata(chainName) : null;
@@ -21,7 +23,16 @@ export function CoreBaseFields({ owner, onChange, chainName }: CoreBaseFieldsPro
   const wallet = useWallet(chainName, protocol);
 
   const handleUseWalletAddress = () => {
-    // Prefer unified wallet address, fallback to account for EVM
+    // If using deployer accounts, use selected deployer account address
+    if (useDeployerAccounts && selectedDeployerAccountId) {
+      const deployerAccount = deployerAccounts.find((a) => a.id === selectedDeployerAccountId);
+      if (deployerAccount) {
+        onChange(deployerAccount.address);
+        return;
+      }
+    }
+
+    // Otherwise use connected wallet address
     const address = wallet.address || account?.addresses?.[0]?.address;
 
     if (address) {
@@ -29,8 +40,11 @@ export function CoreBaseFields({ owner, onChange, chainName }: CoreBaseFieldsPro
     }
   };
 
-  // Determine if we have a wallet connected
+  // Determine if we have a wallet connected or deployer account selected
   const hasWalletAddress = () => {
+    if (useDeployerAccounts && selectedDeployerAccountId) {
+      return true;
+    }
     return wallet.isConnected || !!account?.addresses?.[0]?.address;
   };
 
@@ -55,7 +69,7 @@ export function CoreBaseFields({ owner, onChange, chainName }: CoreBaseFieldsPro
               onClick={handleUseWalletAddress}
               className="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 rounded border border-blue-200 transition-colors"
             >
-              Use Wallet
+              {useDeployerAccounts && selectedDeployerAccountId ? 'Use Deployer' : 'Use Wallet'}
             </button>
           )}
         </div>
