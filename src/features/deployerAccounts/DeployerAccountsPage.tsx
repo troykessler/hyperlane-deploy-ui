@@ -1,11 +1,12 @@
-import { useState } from 'react';
 import { ProtocolType } from '@hyperlane-xyz/utils';
+import { useState } from 'react';
 import { useStore } from '../store';
-import { GenerateAccountModal } from './GenerateAccountModal';
-import { UnlockVaultModal } from './UnlockVaultModal';
-import { SetupPinModal } from './SetupPinModal';
 import { ChangePinModal } from './ChangePinModal';
+import { CosmosBech32Modal } from './CosmosBech32Modal';
+import { GenerateAccountModal } from './GenerateAccountModal';
+import { SetupPinModal } from './SetupPinModal';
 import type { DeployerAccount } from './types';
+import { UnlockVaultModal } from './UnlockVaultModal';
 
 /**
  * Deployer Accounts Management Page
@@ -26,6 +27,7 @@ export function DeployerAccountsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showUnlockModal, setShowUnlockModal] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [cosmosBech32Account, setCosmosBech32Account] = useState<DeployerAccount | null>(null);
 
   const isVaultLocked = hasVaultPin() && !vaultUnlocked;
 
@@ -75,7 +77,10 @@ export function DeployerAccountsPage() {
       formattedKey = '0x' + formattedKey;
     }
 
-    console.log('[handleCopyPrivateKey] Copying formatted key:', formattedKey.substring(0, 10) + '...');
+    console.log(
+      '[handleCopyPrivateKey] Copying formatted key:',
+      formattedKey.substring(0, 10) + '...',
+    );
 
     // Copy to clipboard
     navigator.clipboard.writeText(formattedKey);
@@ -93,14 +98,14 @@ export function DeployerAccountsPage() {
       {/* Security Warning Banner */}
       <div
         className={`${
-          hasVaultPin() ? 'bg-blue-50 border-blue-200' : 'bg-amber-50 border-amber-200'
-        } border rounded-lg p-4`}
+          hasVaultPin() ? 'border-blue-200 bg-blue-50' : 'border-amber-200 bg-amber-50'
+        } rounded-lg border p-4`}
       >
         <div className="flex items-start gap-3">
           <span className="text-2xl">{hasVaultPin() ? '🔒' : '⚠️'}</span>
           <div className="flex-1">
             <h3
-              className={`text-sm font-semibold mb-1 ${
+              className={`mb-1 text-sm font-semibold ${
                 hasVaultPin() ? 'text-blue-900' : 'text-amber-900'
               }`}
             >
@@ -119,7 +124,7 @@ export function DeployerAccountsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Deployer Accounts</h1>
-          <p className="text-sm text-gray-600 mt-1">
+          <p className="mt-1 text-sm text-gray-600">
             Manage temporary accounts for automated deployments
           </p>
         </div>
@@ -127,7 +132,7 @@ export function DeployerAccountsPage() {
           {hasVaultPin() && vaultUnlocked && (
             <button
               onClick={() => setShowChangePin(true)}
-              className="px-4 py-2 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
+              className="rounded-lg bg-purple-600 px-4 py-2 font-medium text-white transition-colors hover:bg-purple-700"
             >
               Change PIN
             </button>
@@ -135,14 +140,14 @@ export function DeployerAccountsPage() {
           {deployerAccounts.length > 0 && (
             <button
               onClick={() => setShowDeleteConfirm(true)}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors"
+              className="rounded-lg bg-red-600 px-4 py-2 font-medium text-white transition-colors hover:bg-red-700"
             >
               Delete All
             </button>
           )}
           <button
             onClick={handleGenerateClick}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+            className="rounded-lg bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700"
           >
             + Generate New Account
           </button>
@@ -151,7 +156,7 @@ export function DeployerAccountsPage() {
 
       {/* Vault Locked Banner */}
       {isVaultLocked && (
-        <div className="border border-amber-200 bg-amber-50 rounded-lg p-4">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="text-2xl">🔒</span>
@@ -164,7 +169,7 @@ export function DeployerAccountsPage() {
             </div>
             <button
               onClick={() => setShowUnlockModal(true)}
-              className="px-4 py-2 bg-amber-600 text-white rounded-lg font-medium hover:bg-amber-700 transition-colors text-sm"
+              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-700"
             >
               Unlock Vault
             </button>
@@ -174,21 +179,21 @@ export function DeployerAccountsPage() {
 
       {/* Accounts Table */}
       {deployerAccounts.length === 0 ? (
-        <div className="border border-gray-200 rounded-lg p-12 text-center">
-          <div className="text-4xl mb-4">🔑</div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">No Deployer Accounts</h3>
-          <p className="text-sm text-gray-600 mb-4">
+        <div className="rounded-lg border border-gray-200 p-12 text-center">
+          <div className="mb-4 text-4xl">🔑</div>
+          <h3 className="mb-2 text-lg font-semibold text-gray-900">No Deployer Accounts</h3>
+          <p className="mb-4 text-sm text-gray-600">
             Generate an account to start deploying without wallet approval prompts
           </p>
           <button
             onClick={handleGenerateClick}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+            className="rounded-lg bg-blue-600 px-6 py-2 font-medium text-white transition-colors hover:bg-blue-700"
           >
             Generate Your First Account
           </button>
         </div>
       ) : (
-        <div className="border border-gray-200 rounded-lg overflow-hidden">
+        <div className="overflow-hidden rounded-lg border border-gray-200">
           <table className="w-full">
             <thead className="bg-gray-50">
               <tr>
@@ -204,7 +209,7 @@ export function DeployerAccountsPage() {
                 <tr key={account.id} className="hover:bg-gray-50">
                   <td className="px-4 py-3 text-sm text-gray-900">{account.protocol}</td>
                   <td className="px-4 py-3">
-                    <code className="text-xs bg-gray-100 px-2 py-1 rounded text-gray-700">
+                    <code className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700">
                       {account.address.slice(0, 10)}...{account.address.slice(-8)}
                     </code>
                   </td>
@@ -215,8 +220,21 @@ export function DeployerAccountsPage() {
                   <td className="px-4 py-3 text-right">
                     <div className="flex justify-end gap-2">
                       <button
-                        onClick={() => navigator.clipboard.writeText(account.address)}
-                        className="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                        onClick={() => {
+                          // For Cosmos chains, show bech32 prefix modal (no vault unlock needed - public address only)
+                          if (account.protocol === ProtocolType.CosmosNative) {
+                            setCosmosBech32Account(account);
+                          } else {
+                            // For other chains, copy address directly
+                            navigator.clipboard.writeText(account.address);
+                          }
+                        }}
+                        className="rounded bg-gray-100 px-3 py-1 text-xs text-gray-700 transition-colors hover:bg-gray-200"
+                        title={
+                          account.protocol === ProtocolType.CosmosNative
+                            ? 'Generate address with custom bech32 prefix'
+                            : 'Copy address to clipboard'
+                        }
                       >
                         Copy Address
                       </button>
@@ -228,20 +246,26 @@ export function DeployerAccountsPage() {
                             handleCopyPrivateKey(account);
                           }
                         }}
-                        className={`px-3 py-1 text-xs rounded transition-colors ${
+                        className={`rounded px-3 py-1 text-xs transition-colors ${
                           isVaultLocked
                             ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
                             : copiedKey === account.id
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                         }`}
-                        title={isVaultLocked ? 'Unlock vault to copy private key' : 'Copy private key'}
+                        title={
+                          isVaultLocked ? 'Unlock vault to copy private key' : 'Copy private key'
+                        }
                       >
-                        {isVaultLocked ? '🔒 Copy Key' : copiedKey === account.id ? '✓ Copied' : 'Copy Key'}
+                        {isVaultLocked
+                          ? '🔒 Copy Key'
+                          : copiedKey === account.id
+                            ? '✓ Copied'
+                            : 'Copy Key'}
                       </button>
                       <button
                         onClick={() => handleDelete(account.id)}
-                        className="px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                        className="rounded bg-red-600 px-3 py-1 text-xs text-white transition-colors hover:bg-red-700"
                       >
                         Delete
                       </button>
@@ -276,38 +300,44 @@ export function DeployerAccountsPage() {
         />
       )}
 
-      {showGenerateModal && (
-        <GenerateAccountModal onClose={() => setShowGenerateModal(false)} />
-      )}
+      {showGenerateModal && <GenerateAccountModal onClose={() => setShowGenerateModal(false)} />}
 
       {/* Delete All Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete All Accounts?</h3>
-            <p className="text-sm text-gray-600 mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="mx-4 w-full max-w-md rounded-lg bg-white p-6">
+            <h3 className="mb-2 text-lg font-semibold text-gray-900">Delete All Accounts?</h3>
+            <p className="mb-4 text-sm text-gray-600">
               This will permanently delete all {deployerAccounts.length} deployer account(s) from
               localStorage. This action cannot be undone.
             </p>
-            <p className="text-sm text-amber-800 bg-amber-50 p-3 rounded mb-4">
+            <p className="mb-4 rounded bg-amber-50 p-3 text-sm text-amber-800">
               ⚠️ Make sure to sweep any remaining funds before deleting accounts.
             </p>
             <div className="flex justify-end gap-3">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+                className="rounded-lg bg-gray-100 px-4 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-200"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDeleteAll}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors"
+                className="rounded-lg bg-red-600 px-4 py-2 font-medium text-white transition-colors hover:bg-red-700"
               >
                 Delete All
               </button>
             </div>
           </div>
         </div>
+      )}
+
+      {/* Cosmos Bech32 Address Modal */}
+      {cosmosBech32Account && (
+        <CosmosBech32Modal
+          existingAddress={cosmosBech32Account.address}
+          onClose={() => setCosmosBech32Account(null)}
+        />
       )}
     </div>
   );
