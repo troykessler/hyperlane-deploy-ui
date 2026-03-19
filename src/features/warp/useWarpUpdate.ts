@@ -1,9 +1,10 @@
 import { useState, useCallback } from 'react';
 import { ChainName, EvmWarpModule } from '@hyperlane-xyz/sdk';
 import { AltVMWarpModule } from '@hyperlane-xyz/deploy-sdk';
+import { ProtocolType } from '@hyperlane-xyz/utils';
 import { useMultiProvider } from '../chains/hooks';
 import { createChainLookup } from '../../utils/chainLookup';
-import { createAltVMSigner, createEvmSigner } from '../../utils/signerAdapters';
+import { createAltVMSigner, createEvmSigner, createEvmSignerFromPrivateKey, createCosmosSignerFromPrivateKey, createRadixSignerFromPrivateKey, createAleoSignerFromPrivateKey } from '../../utils/signerAdapters';
 import { logger } from '../../utils/logger';
 import type { WarpConfig } from './types';
 import { validateWarpConfig } from './validation';
@@ -27,7 +28,8 @@ export function useWarpUpdate() {
       chainName: ChainName,
       warpRouteAddress: string,
       config: WarpConfig,
-      walletClient: any
+      walletClient: any,
+      deployerPrivateKey?: string
     ): Promise<boolean> => {
       try {
         setProgress({
@@ -54,10 +56,17 @@ export function useWarpUpdate() {
           // EVM chain: use EvmWarpModule
           const evmMultiProvider = multiProvider.toMultiProvider();
 
-          // Convert wallet client (viem) to ethers signer
-          if (walletClient) {
+          // Create signer from deployer account or wallet
+          if (deployerPrivateKey) {
+            logger.debug('Using deployer account for warp update', { chainName });
+            const signer = await createEvmSignerFromPrivateKey(deployerPrivateKey, chainMetadata);
+            evmMultiProvider.setSharedSigner(signer);
+          } else if (walletClient) {
+            logger.debug('Using wallet client for warp update', { chainName });
             const signer = await createEvmSigner(walletClient, chainMetadata);
             evmMultiProvider.setSharedSigner(signer);
+          } else {
+            throw new Error('No wallet or deployer account available');
           }
 
           const module = await EvmWarpModule.create({
@@ -69,10 +78,30 @@ export function useWarpUpdate() {
 
           logger.debug('Applying warp config update (EVM)', { chainName, config });
           await module.update(config as any);
-        } else{
+        } else {
           // AltVM chain: use AltVMWarpModule
           const chainLookup = createChainLookup(multiProvider);
-          const signer = await createAltVMSigner(chainMetadata, walletClient);
+
+          let signer;
+          if (deployerPrivateKey) {
+            logger.debug('Using deployer account for warp update (AltVM)', { chainName, protocol: chainMetadata.protocol });
+
+            // Create signer based on protocol
+            if (chainMetadata.protocol === ProtocolType.CosmosNative) {
+              signer = await createCosmosSignerFromPrivateKey(deployerPrivateKey, chainMetadata);
+            } else if (chainMetadata.protocol === ProtocolType.RadixNative) {
+              signer = await createRadixSignerFromPrivateKey(deployerPrivateKey, chainMetadata);
+            } else if (chainMetadata.protocol === ProtocolType.AleoNative) {
+              signer = await createAleoSignerFromPrivateKey(deployerPrivateKey, chainMetadata);
+            } else {
+              throw new Error(`Unsupported AltVM protocol for deployer accounts: ${chainMetadata.protocol}`);
+            }
+          } else if (walletClient) {
+            logger.debug('Using wallet client for warp update (AltVM)', { chainName });
+            signer = await createAltVMSigner(chainMetadata, walletClient);
+          } else {
+            throw new Error('No wallet or deployer account available');
+          }
 
           const module = new AltVMWarpModule(chainLookup, signer, {
             chain: chainName,

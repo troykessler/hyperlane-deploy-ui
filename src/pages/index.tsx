@@ -311,27 +311,31 @@ const Home: NextPage = () => {
   };
 
   const handleApplyWarpUpdates = async () => {
-    if (!selectedChain || !warpRouteAddress || !editedWarpConfig) {
-      setApplyError('Please select a chain, provide warp route address, and edit the configuration');
-      return;
-    }
-
-    setApplyError('');
-
-    try {
-      const walletClient = await getWalletClient();
-      if (!walletClient) {
-        setApplyError('Please connect your wallet first');
+    await checkVaultAndExecute(async () => {
+      if (!selectedChain || !warpRouteAddress || !editedWarpConfig) {
+        setApplyError('Please select a chain, provide warp route address, and edit the configuration');
         return;
       }
 
-      const success = await applyWarpUpdate(selectedChain, warpRouteAddress, editedWarpConfig, walletClient);
-      if (success) {
-        await handleReadWarpConfig();
+      setApplyError('');
+
+      try {
+        const walletClient = !useDeployerAccounts ? await getWalletClient() : null;
+        const deployerPrivateKey = getDeployerPrivateKey();
+
+        if (!walletClient && !deployerPrivateKey) {
+          setApplyError('Please connect your wallet or select a deployer account');
+          return;
+        }
+
+        const success = await applyWarpUpdate(selectedChain, warpRouteAddress, editedWarpConfig, walletClient, deployerPrivateKey);
+        if (success) {
+          await handleReadWarpConfig();
+        }
+      } catch (error) {
+        setApplyError(`Failed to apply warp updates: ${error instanceof Error ? error.message : 'Unknown error'}`);
       }
-    } catch (error) {
-      setApplyError(`Failed to apply warp updates: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
+    });
   };
 
   const copyToClipboard = async (text: string) => {
@@ -994,7 +998,9 @@ const Home: NextPage = () => {
           );
         })()}
 
-        {activePage === 'apply-warp' && (
+        {activePage === 'apply-warp' && (() => {
+          const hasDeployerAccounts = deployerAccounts.length > 0 || encryptedVault !== null;
+          return (
           <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
             <h2 className="text-2xl font-bold text-gray-900">Apply Warp Config Updates</h2>
             <p className="text-gray-600">
@@ -1009,9 +1015,17 @@ const Home: NextPage = () => {
               <ChainSelectField value={selectedChain} onChange={setSelectedChain} label="" />
             </div>
 
+            {/* Deployer Account Selector */}
+            {hasDeployerAccounts && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">2. Select Deployment Source</h3>
+                <DeployerAccountSelector onVaultLocked={() => setShowVaultUnlock(true)} />
+              </div>
+            )}
+
             {selectedChain && (
               <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">2. Select Warp Route</h3>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">{hasDeployerAccounts ? '3' : '2'}. Select Warp Route</h3>
                 <WarpConfigSelector
                   chainName={selectedChain}
                   onSelect={setWarpRouteAddress}
@@ -1022,7 +1036,7 @@ const Home: NextPage = () => {
 
             {selectedChain && (
               <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">3. Or Enter Warp Route Address Manually</h3>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">{hasDeployerAccounts ? '4' : '3'}. Or Enter Warp Route Address Manually</h3>
                 <input
                   type="text"
                   value={warpRouteAddress}
@@ -1048,7 +1062,7 @@ const Home: NextPage = () => {
 
             {readWarpConfigData && (
               <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">3. Edit Configuration</h3>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">{hasDeployerAccounts ? '5' : '4'}. Edit Configuration</h3>
                 <WarpFormBuilder
                   chainName={selectedChain}
                   initialConfig={readWarpConfigData as WarpConfig}
@@ -1099,11 +1113,13 @@ const Home: NextPage = () => {
 
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-800">
-                <strong>Note:</strong> Read current warp route configuration, edit it, and apply changes. Wallet must be connected.
+                <strong>Note:</strong> Read current warp route configuration, edit it, and apply changes.{' '}
+                {hasDeployerAccounts ? 'Connect wallet or select deployer account.' : 'Wallet must be connected.'}
               </p>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {activePage === 'deployer-accounts' && (
           <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
