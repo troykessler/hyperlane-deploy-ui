@@ -1,21 +1,21 @@
-import { useState, useCallback } from 'react';
-import { ChainName, EvmWarpModule } from '@hyperlane-xyz/sdk';
 import { AltVMDeployer } from '@hyperlane-xyz/deploy-sdk';
-import { ProtocolType } from '@hyperlane-xyz/utils';
-import { useMultiProvider } from '../chains/hooks';
+import { ChainName, EvmWarpModule } from '@hyperlane-xyz/sdk';
+import { ProtocolType, addressToBytes32 } from '@hyperlane-xyz/utils';
+import { useCallback, useState } from 'react';
+import { logger } from '../../utils/logger';
+import { initializeAltVMProtocols } from '../../utils/protocolInit';
+import { isEvmChain } from '../../utils/protocolUtils';
 import {
+  createAleoSignerFromPrivateKey,
   createAltVMSigner,
+  createCosmosSignerFromPrivateKey,
   createEvmSigner,
   createEvmSignerFromPrivateKey,
-  createCosmosSignerFromPrivateKey,
   createRadixSignerFromPrivateKey,
-  createAleoSignerFromPrivateKey,
 } from '../../utils/signerAdapters';
-import { logger } from '../../utils/logger';
-import type { WarpConfig, MultiChainDeployStatuses } from './types';
+import { useMultiProvider } from '../chains/hooks';
+import type { MultiChainDeployStatuses, WarpConfig } from './types';
 import { validateWarpConfig } from './validation';
-import { isEvmChain } from '../../utils/protocolUtils';
-import { initializeAltVMProtocols } from '../../utils/protocolInit';
 
 /**
  * Hook for deploying warp routes across multiple chains
@@ -30,7 +30,7 @@ export function useWarpMultiDeploy() {
     async (
       configsMap: Record<ChainName, WarpConfig>,
       walletsMap: Record<ChainName, any>,
-      deployerPrivateKeys?: Record<ChainName, string | undefined>
+      deployerPrivateKeys?: Record<ChainName, string | undefined>,
     ): Promise<Record<ChainName, string> | null> => {
       const chains = Object.keys(configsMap) as ChainName[];
 
@@ -76,21 +76,34 @@ export function useWarpMultiDeploy() {
               if (chainPrivateKey) {
                 switch (chainMetadata.protocol) {
                   case ProtocolType.CosmosNative:
-                    signersMap[chain] = await createCosmosSignerFromPrivateKey(chainPrivateKey, chainMetadata);
+                    signersMap[chain] = await createCosmosSignerFromPrivateKey(
+                      chainPrivateKey,
+                      chainMetadata,
+                    );
                     break;
                   case ProtocolType.Radix:
-                    signersMap[chain] = await createRadixSignerFromPrivateKey(chainPrivateKey, chainMetadata);
+                    signersMap[chain] = await createRadixSignerFromPrivateKey(
+                      chainPrivateKey,
+                      chainMetadata,
+                    );
                     break;
                   case ProtocolType.Aleo:
-                    signersMap[chain] = await createAleoSignerFromPrivateKey(chainPrivateKey, chainMetadata);
+                    signersMap[chain] = await createAleoSignerFromPrivateKey(
+                      chainPrivateKey,
+                      chainMetadata,
+                    );
                     break;
                   default:
-                    throw new Error(`Unsupported protocol for deployer account: ${chainMetadata.protocol}`);
+                    throw new Error(
+                      `Unsupported protocol for deployer account: ${chainMetadata.protocol}`,
+                    );
                 }
               } else {
                 const wallet = walletsMap[chain];
                 if (!wallet) {
-                  throw new Error(`No signer available for ${chain}. Either provide deployer private key or connect wallet.`);
+                  throw new Error(
+                    `No signer available for ${chain}. Either provide deployer private key or connect wallet.`,
+                  );
                 }
                 signersMap[chain] = await createAltVMSigner(chainMetadata, wallet);
               }
@@ -157,7 +170,7 @@ export function useWarpMultiDeploy() {
 
           const deployer = new AltVMDeployer(signersMap);
           const altVMConfigs = Object.fromEntries(
-            altVMChains.map(chain => [chain, configsMap[chain]])
+            altVMChains.map((chain) => [chain, configsMap[chain]]),
           );
           const deployedAddresses = await deployer.deploy(altVMConfigs);
 
@@ -257,9 +270,12 @@ export function useWarpMultiDeploy() {
               }
             }
 
-            logger.debug(`Enrolling ${Object.keys(remoteRouters).length} remote routers on ${sourceChain}`, {
-              remoteRouters,
-            });
+            logger.debug(
+              `Enrolling ${Object.keys(remoteRouters).length} remote routers on ${sourceChain}`,
+              {
+                remoteRouters,
+              },
+            );
 
             const sourceMetadata = multiProvider.tryGetChainMetadata(sourceChain);
             if (!sourceMetadata) {
@@ -283,10 +299,8 @@ export function useWarpMultiDeploy() {
               for (const [domainId, routerAddress] of Object.entries(remoteRouters)) {
                 const domain = Number(domainId);
 
-                // Convert address to bytes32
-                // For EVM addresses, pad with zeros on the left
-                const bytes32Router = routerAddress.toLowerCase().replace('0x', '').padStart(64, '0');
-                const routerBytes32 = '0x' + bytes32Router;
+                // Convert address to bytes32 using Hyperlane utility
+                const routerBytes32 = addressToBytes32(routerAddress);
 
                 logger.debug(`Enrolling remote router on ${sourceChain}`, {
                   domain,
@@ -303,7 +317,10 @@ export function useWarpMultiDeploy() {
                 });
 
                 // Set destination gas
-                logger.debug(`Setting destination gas on ${sourceChain}`, { domain, gas: '200000' });
+                logger.debug(`Setting destination gas on ${sourceChain}`, {
+                  domain,
+                  gas: '200000',
+                });
                 const gasTx = await contract.setDestinationGas(domain, '200000');
                 await gasTx.wait();
                 logger.debug(`Destination gas set on ${sourceChain}`, {
@@ -320,13 +337,22 @@ export function useWarpMultiDeploy() {
 
               // Enroll each remote router
               for (const [domainId, routerAddress] of Object.entries(remoteRouters)) {
-                logger.debug(`Enrolling remote router ${routerAddress} (domain ${domainId}) on ${sourceChain}`);
+                // Convert address to bytes32 using Hyperlane utility
+                const addressBytes32 = addressToBytes32(routerAddress);
+
+                logger.debug(
+                  `Enrolling remote router ${routerAddress} (domain ${domainId}) on ${sourceChain}`,
+                  {
+                    originalAddress: routerAddress,
+                    addressBytes32,
+                  },
+                );
 
                 await signer.enrollRemoteRouter({
                   tokenAddress: addresses[sourceChain],
                   remoteRouter: {
                     receiverDomainId: Number(domainId),
-                    receiverAddress: routerAddress,
+                    receiverAddress: addressBytes32,
                     gas: '200000', // Default gas for remote execution
                   },
                 });
@@ -349,7 +375,7 @@ export function useWarpMultiDeploy() {
             setChainStatuses((prev) => ({ ...prev, [chain]: 'failed' }));
           }
           throw new Error(
-            `Router enrollment failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+            `Router enrollment failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
           );
         }
 
@@ -364,7 +390,7 @@ export function useWarpMultiDeploy() {
         return null;
       }
     },
-    [multiProvider]
+    [multiProvider],
   );
 
   const reset = useCallback(() => {
@@ -378,8 +404,7 @@ export function useWarpMultiDeploy() {
     deployedAddresses,
     reset,
     isDeploying: Object.values(chainStatuses).some(
-      (status) =>
-        status === 'validating' || status === 'deploying' || status === 'enrolling'
+      (status) => status === 'validating' || status === 'deploying' || status === 'enrolling',
     ),
   };
 }

@@ -1,10 +1,11 @@
 import { useState, useCallback } from 'react';
-import { ChainName, EvmCoreModule } from '@hyperlane-xyz/sdk';
+import { ChainName } from '@hyperlane-xyz/sdk';
 import { CoreConfig } from '@hyperlane-xyz/provider-sdk/core';
-import { AltVMCoreModule } from '@hyperlane-xyz/deploy-sdk';
 import { ProtocolType } from '@hyperlane-xyz/utils';
 import { useMultiProvider } from '../chains/hooks';
-import { createChainLookup } from '../../utils/chainLookup';
+import { useDeployFactories } from './useDeployFactories';
+import { useDeployIsm } from './useDeployIsm';
+import { useDeployHook } from './useDeployHook';
 import {
   createAltVMSigner,
   createEvmSigner,
@@ -28,6 +29,9 @@ export function useApplyCoreConfig() {
     message: '',
   });
   const multiProvider = useMultiProvider();
+  const { deployFactories } = useDeployFactories();
+  const { deployIsm } = useDeployIsm();
+  const { deployHook } = useDeployHook();
 
   const applyConfig = useCallback(
     async (
@@ -76,9 +80,11 @@ export function useApplyCoreConfig() {
           let signer;
           if (deployerPrivateKey) {
             signer = await createEvmSignerFromPrivateKey(deployerPrivateKey, chainMetadata);
+            evmMultiProvider.setSharedSigner(signer);
             logger.debug('Using deployer account signer for config update');
           } else if (walletClient) {
             signer = await createEvmSigner(walletClient, chainMetadata);
+            evmMultiProvider.setSharedSigner(signer);
             logger.debug('Using connected wallet signer for config update');
           } else {
             throw new Error('No signer available - connect wallet or select deployer account');
@@ -129,36 +135,176 @@ export function useApplyCoreConfig() {
               }
             } else if (typeof newConfig.defaultIsm === 'object') {
               // ISM is a config object that needs deployment
-              logger.debug('ISM is a config object, needs deployment first', { config: newConfig.defaultIsm });
-              throw new Error(
-                'Cannot deploy ISM config objects directly yet. ' +
-                'Please deploy the ISM separately and use its address instead. ' +
-                'In the form, toggle "Use existing address" and enter the deployed ISM address.'
-              );
+              logger.debug('ISM is a config object, needs deployment', { config: newConfig.defaultIsm });
+
+              try {
+                // Deploy factories (registry → cache → deploy)
+                setProgress({
+                  status: 'applying',
+                  message: 'Deploying factory contracts...',
+                });
+                const factories = await deployFactories(chainName, evmMultiProvider);
+
+                // Deploy ISM using SDK module
+                setProgress({
+                  status: 'applying',
+                  message: 'Deploying ISM configuration...',
+                });
+                const deployedIsmAddress = await deployIsm(
+                  chainName,
+                  newConfig.defaultIsm,
+                  mailboxAddress,
+                  factories,
+                  evmMultiProvider
+                );
+
+                logger.debug('ISM deployed successfully', { address: deployedIsmAddress });
+
+                // Update mailbox to use the newly deployed ISM
+                if (deployedIsmAddress.toLowerCase() !== currentIsm.toLowerCase()) {
+                  setProgress({
+                    status: 'applying',
+                    message: 'Setting default ISM on mailbox...',
+                  });
+                  logger.debug('Setting deployed ISM as default on mailbox', {
+                    address: deployedIsmAddress,
+                  });
+                  const tx = await mailbox.setDefaultIsm(deployedIsmAddress);
+                  await tx.wait();
+                  logger.debug('Default ISM updated with deployed address', { txHash: tx.hash });
+                  txCount++;
+                }
+              } catch (deployError) {
+                logger.error('Failed to deploy ISM config', deployError);
+                throw new Error(
+                  `Failed to deploy ISM configuration: ${deployError instanceof Error ? deployError.message : 'Unknown error'}. ` +
+                  `Try using "Use existing address" mode to reference a pre-deployed ISM instead.`
+                );
+              }
             }
           }
 
           // Update defaultHook if changed
-          if (typeof newConfig.defaultHook === 'string') {
-            const newHook = newConfig.defaultHook.toLowerCase();
-            if (newHook !== currentDefaultHook.toLowerCase()) {
-              logger.debug('Updating default hook', { from: currentDefaultHook, to: newHook });
-              const tx = await mailbox.setDefaultHook(newConfig.defaultHook);
-              await tx.wait();
-              logger.debug('Default hook updated', { txHash: tx.hash });
-              txCount++;
+          if (newConfig.defaultHook) {
+            if (typeof newConfig.defaultHook === 'string') {
+              const newHook = newConfig.defaultHook.toLowerCase();
+              if (newHook !== currentDefaultHook.toLowerCase()) {
+                logger.debug('Updating default hook', { from: currentDefaultHook, to: newHook });
+                const tx = await mailbox.setDefaultHook(newConfig.defaultHook);
+                await tx.wait();
+                logger.debug('Default hook updated', { txHash: tx.hash });
+                txCount++;
+              }
+            } else if (typeof newConfig.defaultHook === 'object') {
+              // Hook is a config object that needs deployment
+              logger.debug('Default hook is a config object, needs deployment', { config: newConfig.defaultHook });
+
+              try {
+                // Deploy factories (registry → cache → deploy)
+                setProgress({
+                  status: 'applying',
+                  message: 'Deploying factory contracts...',
+                });
+                const factories = await deployFactories(chainName, evmMultiProvider);
+
+                // Deploy hook using SDK module
+                setProgress({
+                  status: 'applying',
+                  message: 'Deploying default hook configuration...',
+                });
+                const deployedHookAddress = await deployHook(
+                  chainName,
+                  newConfig.defaultHook,
+                  { mailbox: mailboxAddress, proxyAdmin: currentOwner },
+                  factories,
+                  evmMultiProvider
+                );
+
+                logger.debug('Default hook deployed successfully', { address: deployedHookAddress });
+
+                // Update mailbox to use the newly deployed hook
+                if (deployedHookAddress.toLowerCase() !== currentDefaultHook.toLowerCase()) {
+                  setProgress({
+                    status: 'applying',
+                    message: 'Setting default hook on mailbox...',
+                  });
+                  logger.debug('Setting deployed hook as default on mailbox', {
+                    address: deployedHookAddress,
+                  });
+                  const tx = await mailbox.setDefaultHook(deployedHookAddress);
+                  await tx.wait();
+                  logger.debug('Default hook updated with deployed address', { txHash: tx.hash });
+                  txCount++;
+                }
+              } catch (deployError) {
+                logger.error('Failed to deploy default hook config', deployError);
+                throw new Error(
+                  `Failed to deploy default hook configuration: ${deployError instanceof Error ? deployError.message : 'Unknown error'}. ` +
+                  `Try using "Use existing address" mode to reference a pre-deployed hook instead.`
+                );
+              }
             }
           }
 
           // Update requiredHook if changed
-          if (typeof newConfig.requiredHook === 'string') {
-            const newHook = newConfig.requiredHook.toLowerCase();
-            if (newHook !== currentRequiredHook.toLowerCase()) {
-              logger.debug('Updating required hook', { from: currentRequiredHook, to: newHook });
-              const tx = await mailbox.setRequiredHook(newConfig.requiredHook);
-              await tx.wait();
-              logger.debug('Required hook updated', { txHash: tx.hash });
-              txCount++;
+          if (newConfig.requiredHook) {
+            if (typeof newConfig.requiredHook === 'string') {
+              const newHook = newConfig.requiredHook.toLowerCase();
+              if (newHook !== currentRequiredHook.toLowerCase()) {
+                logger.debug('Updating required hook', { from: currentRequiredHook, to: newHook });
+                const tx = await mailbox.setRequiredHook(newConfig.requiredHook);
+                await tx.wait();
+                logger.debug('Required hook updated', { txHash: tx.hash });
+                txCount++;
+              }
+            } else if (typeof newConfig.requiredHook === 'object') {
+              // Hook is a config object that needs deployment
+              logger.debug('Required hook is a config object, needs deployment', { config: newConfig.requiredHook });
+
+              try {
+                // Deploy factories (registry → cache → deploy)
+                setProgress({
+                  status: 'applying',
+                  message: 'Deploying factory contracts...',
+                });
+                const factories = await deployFactories(chainName, evmMultiProvider);
+
+                // Deploy hook using SDK module
+                setProgress({
+                  status: 'applying',
+                  message: 'Deploying required hook configuration...',
+                });
+                const deployedHookAddress = await deployHook(
+                  chainName,
+                  newConfig.requiredHook,
+                  { mailbox: mailboxAddress, proxyAdmin: currentOwner },
+                  factories,
+                  evmMultiProvider
+                );
+
+                logger.debug('Required hook deployed successfully', { address: deployedHookAddress });
+
+                // Update mailbox to use the newly deployed hook
+                if (deployedHookAddress.toLowerCase() !== currentRequiredHook.toLowerCase()) {
+                  setProgress({
+                    status: 'applying',
+                    message: 'Setting required hook on mailbox...',
+                  });
+                  logger.debug('Setting deployed hook as required on mailbox', {
+                    address: deployedHookAddress,
+                  });
+                  const tx = await mailbox.setRequiredHook(deployedHookAddress);
+                  await tx.wait();
+                  logger.debug('Required hook updated with deployed address', { txHash: tx.hash });
+                  txCount++;
+                }
+              } catch (deployError) {
+                logger.error('Failed to deploy required hook config', deployError);
+                throw new Error(
+                  `Failed to deploy required hook configuration: ${deployError instanceof Error ? deployError.message : 'Unknown error'}. ` +
+                  `Try using "Use existing address" mode to reference a pre-deployed hook instead.`
+                );
+              }
             }
           }
 
@@ -325,7 +471,7 @@ export function useApplyCoreConfig() {
         return false;
       }
     },
-    [multiProvider]
+    [multiProvider, deployFactories, deployIsm, deployHook]
   );
 
   const reset = useCallback(() => {

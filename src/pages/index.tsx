@@ -854,7 +854,9 @@ const Home: NextPage = () => {
           </div>
         )}
 
-        {activePage === 'apply-core' && (
+        {activePage === 'apply-core' && (() => {
+          const hasDeployerAccounts = deployerAccounts.length > 0 || encryptedVault !== null;
+          return (
           <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
             <h2 className="text-2xl font-bold text-gray-900">Apply Core Config Updates</h2>
             <p className="text-gray-600">
@@ -869,9 +871,17 @@ const Home: NextPage = () => {
               <ChainSelectField value={selectedChain} onChange={setSelectedChain} label="" />
             </div>
 
+            {/* Deployer Account Selector */}
+            {hasDeployerAccounts && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">2. Select Deployment Source</h3>
+                <DeployerAccountSelector onVaultLocked={() => setShowVaultUnlock(true)} />
+              </div>
+            )}
+
             {selectedChain && (
               <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">2. Select Core Deployment</h3>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">{hasDeployerAccounts ? '3' : '2'}. Select Core Deployment</h3>
                 <CoreConfigSelector
                   chainName={selectedChain}
                   onSelect={handleCoreConfigSelect}
@@ -882,7 +892,7 @@ const Home: NextPage = () => {
 
             {selectedChain && (
               <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">3. Or Enter Mailbox Address Manually</h3>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">{hasDeployerAccounts ? '4' : '3'}. Or Enter Mailbox Address Manually</h3>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -920,7 +930,7 @@ const Home: NextPage = () => {
 
             {readCoreConfig && (
               <div>
-                <h3 className="text-sm font-medium text-gray-700 mb-3">4. Edit Configuration</h3>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">{hasDeployerAccounts ? '5' : '4'}. Edit Configuration</h3>
                 <CoreConfigEditor
                   chainName={selectedChain}
                   initialConfig={readCoreConfig}
@@ -981,7 +991,8 @@ const Home: NextPage = () => {
               </p>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {activePage === 'apply-warp' && (
           <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
