@@ -19,6 +19,7 @@ export function MultisigProposalDownload({
 }: MultisigProposalDownloadProps) {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [copiedJson, setCopiedJson] = useState(false);
 
   const handleCopy = (text: string, index: number, field: string) => {
     navigator.clipboard.writeText(text);
@@ -27,6 +28,14 @@ export function MultisigProposalDownload({
     setTimeout(() => {
       setCopiedIndex(null);
       setCopiedField(null);
+    }, 2000);
+  };
+
+  const handleCopyJson = () => {
+    navigator.clipboard.writeText(JSON.stringify(batch, null, 2));
+    setCopiedJson(true);
+    setTimeout(() => {
+      setCopiedJson(false);
     }, 2000);
   };
 
@@ -53,6 +62,14 @@ export function MultisigProposalDownload({
           <strong>For multisig wallets:</strong> Copy the transaction details below and paste them into your multisig wallet interface (Safe, Multisig.xyz, etc.)
         </p>
       </div>
+
+      {/* Copy all as JSON button */}
+      <button
+        onClick={handleCopyJson}
+        className="w-full px-4 py-2 bg-gray-100 hover:bg-gray-200 border border-gray-300 rounded-lg transition-colors font-medium text-sm"
+      >
+        {copiedJson ? '✓ Copied All as JSON' : 'Copy All as JSON'}
+      </button>
 
       {/* Transactions list */}
       <div className="space-y-3 max-h-96 overflow-y-auto">

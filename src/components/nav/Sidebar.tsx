@@ -10,7 +10,8 @@ export type NavigationPage =
   | 'view-deployments'
   | 'explorer-map'
   | 'manage-chains'
-  | 'deployer-accounts';
+  | 'deployer-accounts'
+  | 'multisig-execute';
 
 interface NavItem {
   id: NavigationPage;
@@ -60,6 +61,12 @@ export function Sidebar({ activePage, onNavigate, deploymentCount, customChainCo
         { id: 'view-deployments', label: 'View Deployments' },
         { id: 'deployer-accounts', label: 'Deployer Accounts' },
         { id: 'manage-chains', label: 'Custom Chains' },
+      ],
+    },
+    {
+      title: 'DEMO',
+      items: [
+        { id: 'multisig-execute', label: 'Execute Multisig Txs' },
       ],
     },
     {

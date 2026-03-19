@@ -32,6 +32,7 @@ import { useWarpDeploy } from '../features/warp/useWarpDeploy';
 import { useWarpRead } from '../features/warp/useWarpRead';
 import { useWarpUpdate } from '../features/warp/useWarpUpdate';
 import { MultisigProposalDownload } from '../features/warp/MultisigProposalDownload';
+import { MultisigExecutionDemo } from '../features/warp/MultisigExecutionDemo';
 import { WarpRoutesGraph } from '../features/warpMap';
 
 const Home: NextPage = () => {
@@ -1255,6 +1256,12 @@ const Home: NextPage = () => {
         {activePage === 'deployer-accounts' && (
           <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
             <DeployerAccountsPage />
+          </div>
+        )}
+
+        {activePage === 'multisig-execute' && (
+          <div className="bg-white rounded-lg shadow-md p-6 space-y-6">
+            <MultisigExecutionDemo />
           </div>
         )}
 
