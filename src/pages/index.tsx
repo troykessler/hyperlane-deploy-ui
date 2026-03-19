@@ -80,7 +80,7 @@ const Home: NextPage = () => {
   const multiProvider = useMultiProvider();
   const { deploy, progress, isDeploying } = useCoreDeploy();
   const { readConfig, currentConfig: readCoreConfig, progress: readProgress, isReading } = useReadCoreConfig();
-  const { applyConfig, progress: applyProgress, isApplying } = useApplyCoreConfig();
+  const { applyConfig, progress: applyProgress, isApplying, generatedBatch: coreGeneratedBatch, clearBatch: coreClearBatch } = useApplyCoreConfig();
   const { deploy: deployWarp, progress: warpProgress, isDeploying: isDeployingWarp } = useWarpDeploy();
   const { readConfig: readWarpConfig, currentConfig: readWarpConfigData, progress: warpReadProgress, isReading: isReadingWarp } = useWarpRead();
   const { applyUpdate: applyWarpUpdate, progress: warpUpdateProgress, isApplying: isApplyingWarp, generatedBatch, clearBatch } = useWarpUpdate();
@@ -97,6 +97,7 @@ const Home: NextPage = () => {
   const [warpRouteAddress, setWarpRouteAddress] = useState<string>('');
   const [editedWarpConfig, setEditedWarpConfig] = useState<WarpConfig | null>(null);
   const [warpExecutionMode, setWarpExecutionMode] = useState<'direct' | 'multisig'>('direct');
+  const [coreExecutionMode, setCoreExecutionMode] = useState<'direct' | 'multisig'>('direct');
 
   // Get protocol for selected chain
   const selectedProtocol = useMemo(() => {
@@ -197,18 +198,30 @@ const Home: NextPage = () => {
       setApplyError('');
 
       try {
-        const walletClient = !useDeployerAccounts ? await getWalletClient() : null;
-        const deployerPrivateKey = getDeployerPrivateKey();
+        // Multisig mode doesn't need wallet/deployer account
+        const walletClient = coreExecutionMode === 'direct' && !useDeployerAccounts ? await getWalletClient() : null;
+        const deployerPrivateKey = coreExecutionMode === 'direct' ? getDeployerPrivateKey() : undefined;
 
-        if (!walletClient && !deployerPrivateKey) {
+        if (coreExecutionMode === 'direct' && !walletClient && !deployerPrivateKey) {
           setApplyError('Please connect your wallet or select a deployer account');
           return;
         }
 
-        const success = await applyConfig(selectedChain, editedConfig, walletClient, mailboxAddress, deployerPrivateKey);
+        const success = await applyConfig(
+          selectedChain,
+          editedConfig,
+          walletClient,
+          mailboxAddress,
+          deployerPrivateKey,
+          { executionMode: coreExecutionMode },
+          readCoreConfig || undefined
+        );
+
         if (success) {
-          // Refresh the config after successful apply
-          await handleReadConfig();
+          // Only refresh config in direct mode (multisig mode shows download modal)
+          if (coreExecutionMode === 'direct') {
+            await handleReadConfig();
+          }
         }
       } catch (error) {
         setApplyError(`Failed to apply updates: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -960,6 +973,48 @@ const Home: NextPage = () => {
               </div>
             )}
 
+            {/* Execution Mode Toggle */}
+            {editedConfig && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">
+                  {hasDeployerAccounts ? '6' : '5'}. Execution Mode
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setCoreExecutionMode('direct')}
+                    className={`px-4 py-3 rounded-lg border-2 font-medium transition-all ${
+                      coreExecutionMode === 'direct'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                    }`}
+                  >
+                    <div className="text-sm font-semibold">Execute Now</div>
+                    <div className="text-xs text-gray-600 mt-1">Via wallet or deployer account</div>
+                  </button>
+                  <button
+                    onClick={() => setCoreExecutionMode('multisig')}
+                    className={`px-4 py-3 rounded-lg border-2 font-medium transition-all ${
+                      coreExecutionMode === 'multisig'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                    }`}
+                  >
+                    <div className="text-sm font-semibold">Generate Transactions</div>
+                    <div className="text-xs text-gray-600 mt-1">For multisig wallets</div>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Show multisig download modal if batch generated */}
+            {coreGeneratedBatch && (
+              <MultisigProposalDownload
+                batch={coreGeneratedBatch}
+                chainName={selectedChain}
+                onClose={coreClearBatch}
+              />
+            )}
+
             {applyProgress.status !== 'idle' && (
               <DeployProgress
                 status={
@@ -998,7 +1053,9 @@ const Home: NextPage = () => {
                   selectedChain && editedConfig && !isApplying ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-400 text-white cursor-not-allowed'
                 }`}
               >
-                {isApplying ? 'Applying...' : 'Apply Updates'}
+                {isApplying
+                  ? (coreExecutionMode === 'multisig' ? 'Generating...' : 'Applying...')
+                  : (coreExecutionMode === 'multisig' ? 'Generate Transactions' : 'Apply Updates')}
               </button>
             </div>
 
@@ -1053,13 +1110,25 @@ const Home: NextPage = () => {
             {selectedChain && (
               <div>
                 <h3 className="text-sm font-medium text-gray-700 mb-3">{hasDeployerAccounts ? '4' : '3'}. Or Enter Warp Route Address Manually</h3>
-                <input
-                  type="text"
-                  value={warpRouteAddress}
-                  onChange={(e) => setWarpRouteAddress(e.target.value)}
-                  placeholder="Enter deployed warp route contract address (optional)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={warpRouteAddress}
+                    onChange={(e) => setWarpRouteAddress(e.target.value)}
+                    placeholder="Enter deployed warp route contract address (optional)"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                  />
+                  <button
+                    onClick={handleReadWarpConfig}
+                    disabled={!warpRouteAddress || isReadingWarp}
+                    className={`px-6 py-2 rounded-lg font-medium transition-colors whitespace-nowrap ${
+                      warpRouteAddress && !isReadingWarp ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-400 text-white cursor-not-allowed'
+                    }`}
+                  >
+                    {isReadingWarp ? 'Reading...' : 'Read Config'}
+                  </button>
+                </div>
+                <p className="mt-2 text-xs text-gray-500">Enter a different warp route address if you want to read from a deployment not listed above.</p>
               </div>
             )}
 
@@ -1149,15 +1218,17 @@ const Home: NextPage = () => {
             )}
 
             <div className="flex gap-3">
-              <button
-                onClick={handleReadWarpConfig}
-                disabled={!selectedChain || !warpRouteAddress || isReadingWarp}
-                className={`flex-1 px-6 py-3 rounded-lg font-medium transition-colors ${
-                  selectedChain && warpRouteAddress && !isReadingWarp ? 'bg-gray-600 text-white hover:bg-gray-700' : 'bg-gray-400 text-white cursor-not-allowed'
-                }`}
-              >
-                {isReadingWarp ? 'Reading...' : 'Read Current Config'}
-              </button>
+              {readWarpConfigData && (
+                <button
+                  onClick={handleReadWarpConfig}
+                  disabled={!selectedChain || isReadingWarp}
+                  className={`flex-1 px-6 py-3 rounded-lg font-medium transition-colors ${
+                    selectedChain && !isReadingWarp ? 'bg-gray-600 text-white hover:bg-gray-700' : 'bg-gray-400 text-white cursor-not-allowed'
+                  }`}
+                >
+                  {isReadingWarp ? 'Refreshing...' : 'Refresh Config'}
+                </button>
+              )}
               <button
                 onClick={handleApplyWarpUpdates}
                 disabled={!selectedChain || !warpRouteAddress || !editedWarpConfig || isApplyingWarp}

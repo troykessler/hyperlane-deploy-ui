@@ -59,37 +59,16 @@ export function useReadCoreConfig() {
           addressLength: mailboxAddress.length
         });
 
-        // Read just the addresses from the mailbox, not full configs
-        // This makes updates simpler - we store addresses, not complex ISM/hook configs
+        // Read the full deployment configuration including all addresses
         let config: CoreConfig;
         try {
           if (isEvmChain(chainMetadata)) {
-            // EVM: Read addresses directly from mailbox contract
+            // EVM: Use EvmCoreReader to get full deployment addresses
             const evmMultiProvider = multiProvider.toMultiProvider();
-            const provider = evmMultiProvider.getProvider(chainName);
+            const reader = new EvmCoreReader(evmMultiProvider, chainName);
 
-            const { Contract } = await import('ethers');
-            const mailboxAbi = [
-              'function owner() view returns (address)',
-              'function defaultIsm() view returns (address)',
-              'function defaultHook() view returns (address)',
-              'function requiredHook() view returns (address)',
-            ];
-            const mailboxContract = new Contract(mailboxAddress, mailboxAbi, provider);
-
-            const [owner, defaultIsm, defaultHook, requiredHook] = await Promise.all([
-              mailboxContract.owner(),
-              mailboxContract.defaultIsm(),
-              mailboxContract.defaultHook(),
-              mailboxContract.requiredHook(),
-            ]);
-
-            config = {
-              owner,
-              defaultIsm,
-              defaultHook,
-              requiredHook,
-            };
+            // deriveCoreConfig expects an object with addresses
+            config = await reader.deriveCoreConfig({ mailbox: mailboxAddress });
           } else {
             // AltVM: Try to read addresses from mailbox
             const protocolProvider = getProtocolProvider(chainMetadata.protocol);
