@@ -31,6 +31,7 @@ import type { WarpConfig } from '../features/warp/types';
 import { useWarpDeploy } from '../features/warp/useWarpDeploy';
 import { useWarpRead } from '../features/warp/useWarpRead';
 import { useWarpUpdate } from '../features/warp/useWarpUpdate';
+import { MultisigProposalDownload } from '../features/warp/MultisigProposalDownload';
 import { WarpRoutesGraph } from '../features/warpMap';
 
 const Home: NextPage = () => {
@@ -82,7 +83,7 @@ const Home: NextPage = () => {
   const { applyConfig, progress: applyProgress, isApplying } = useApplyCoreConfig();
   const { deploy: deployWarp, progress: warpProgress, isDeploying: isDeployingWarp } = useWarpDeploy();
   const { readConfig: readWarpConfig, currentConfig: readWarpConfigData, progress: warpReadProgress, isReading: isReadingWarp } = useWarpRead();
-  const { applyUpdate: applyWarpUpdate, progress: warpUpdateProgress, isApplying: isApplyingWarp } = useWarpUpdate();
+  const { applyUpdate: applyWarpUpdate, progress: warpUpdateProgress, isApplying: isApplyingWarp, generatedBatch, clearBatch } = useWarpUpdate();
 
   // State for Apply Updates tab
   const [updateType, setUpdateType] = useState<'core' | 'warp'>('core');
@@ -95,6 +96,7 @@ const Home: NextPage = () => {
   const [mailboxAddress, setMailboxAddress] = useState<string>('');
   const [warpRouteAddress, setWarpRouteAddress] = useState<string>('');
   const [editedWarpConfig, setEditedWarpConfig] = useState<WarpConfig | null>(null);
+  const [warpExecutionMode, setWarpExecutionMode] = useState<'direct' | 'multisig'>('direct');
 
   // Get protocol for selected chain
   const selectedProtocol = useMemo(() => {
@@ -320,17 +322,31 @@ const Home: NextPage = () => {
       setApplyError('');
 
       try {
-        const walletClient = !useDeployerAccounts ? await getWalletClient() : null;
-        const deployerPrivateKey = getDeployerPrivateKey();
+        // Multisig mode doesn't need wallet/deployer account
+        const walletClient = warpExecutionMode === 'direct' && !useDeployerAccounts ? await getWalletClient() : null;
+        const deployerPrivateKey = warpExecutionMode === 'direct' ? getDeployerPrivateKey() : undefined;
 
-        if (!walletClient && !deployerPrivateKey) {
+        if (warpExecutionMode === 'direct' && !walletClient && !deployerPrivateKey) {
           setApplyError('Please connect your wallet or select a deployer account');
           return;
         }
 
-        const success = await applyWarpUpdate(selectedChain, warpRouteAddress, editedWarpConfig, walletClient, deployerPrivateKey);
+        const success = await applyWarpUpdate(
+          selectedChain,
+          warpRouteAddress,
+          editedWarpConfig,
+          walletClient,
+          deployerPrivateKey,
+          {
+            executionMode: warpExecutionMode
+          }
+        );
+
         if (success) {
-          await handleReadWarpConfig();
+          // Only refresh config in direct mode (multisig mode shows download modal)
+          if (warpExecutionMode === 'direct') {
+            await handleReadWarpConfig();
+          }
         }
       } catch (error) {
         setApplyError(`Failed to apply warp updates: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -1071,6 +1087,48 @@ const Home: NextPage = () => {
               </div>
             )}
 
+            {/* Execution Mode Toggle */}
+            {editedWarpConfig && (
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-3">
+                  {hasDeployerAccounts ? '6' : '5'}. Execution Mode
+                </h3>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setWarpExecutionMode('direct')}
+                    className={`px-4 py-3 rounded-lg border-2 font-medium transition-all ${
+                      warpExecutionMode === 'direct'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                    }`}
+                  >
+                    <div className="text-sm font-semibold">Execute Now</div>
+                    <div className="text-xs text-gray-600 mt-1">Via wallet or deployer account</div>
+                  </button>
+                  <button
+                    onClick={() => setWarpExecutionMode('multisig')}
+                    className={`px-4 py-3 rounded-lg border-2 font-medium transition-all ${
+                      warpExecutionMode === 'multisig'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700'
+                        : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                    }`}
+                  >
+                    <div className="text-sm font-semibold">Generate Transactions</div>
+                    <div className="text-xs text-gray-600 mt-1">For multisig wallets</div>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Show multisig download modal if batch generated */}
+            {generatedBatch && (
+              <MultisigProposalDownload
+                batch={generatedBatch}
+                chainName={selectedChain}
+                onClose={clearBatch}
+              />
+            )}
+
             {warpUpdateProgress.status !== 'idle' && (
               <DeployProgress
                 status={
@@ -1107,7 +1165,9 @@ const Home: NextPage = () => {
                   selectedChain && warpRouteAddress && editedWarpConfig && !isApplyingWarp ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-400 text-white cursor-not-allowed'
                 }`}
               >
-                {isApplyingWarp ? 'Applying...' : 'Apply Updates'}
+                {isApplyingWarp
+                  ? (warpExecutionMode === 'multisig' ? 'Generating...' : 'Applying...')
+                  : (warpExecutionMode === 'multisig' ? 'Generate Transactions' : 'Apply Updates')}
               </button>
             </div>
 

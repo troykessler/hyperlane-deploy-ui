@@ -122,3 +122,46 @@ export type MultiChainDeployStatuses = Record<ChainName, WarpDeployStatus>;
  * Config input methods
  */
 export type WarpConfigInputMethod = 'upload' | 'builder' | 'multichain';
+
+/**
+ * Warp apply execution mode
+ */
+export type WarpApplyExecutionMode = 'direct' | 'multisig';
+
+/**
+ * Safe transaction format (Gnosis Safe v1.0)
+ */
+export interface SafeTransaction {
+  to: string;
+  value: string;
+  data: string;
+  operation: 0 | 1; // 0 = Call, 1 = DelegateCall
+  annotation?: string; // Description of what this transaction does
+}
+
+/**
+ * Safe transaction batch format for multisig proposals
+ */
+export interface SafeTransactionBatch {
+  version: string;
+  chainId: string;
+  createdAt: number;
+  meta: {
+    name: string;
+    description: string;
+    txBuilderVersion: string;
+    createdFromSafeAddress?: string;
+  };
+  transactions: SafeTransaction[];
+}
+
+/**
+ * Annotated transaction from SDK (protocol-agnostic)
+ */
+export interface AnnotatedTransaction {
+  to: string;
+  data?: string;
+  value?: string | number | bigint;
+  annotation?: string;
+  chainId?: number;
+}
